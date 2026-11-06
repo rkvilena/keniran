@@ -1,0 +1,61 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "keniran"
+version = "0.1.0"
+description = "Can I run it? Audit this machine against a Steam game's minimum requirements."
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    "typer==0.28.0",
+    "rich==15.0.0",
+    "pydantic==2.14.3",
+    "requests==2.34.2",
+    "beautifulsoup4==4.15.0",
+    "lxml==6.1.3",
+    "rapidfuzz==3.14.6",
+    "psutil==7.2.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff==0.17.4",
+    "mypy==2.4.1",
+    "pytest==9.2.0",
+]
+
+[project.scripts]
+keniran = "keniran.cli.app:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+namespaces = true
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.11"
+files = ["src"]
+check_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_unreachable = true
+
+[[tool.mypy.overrides]]
+module = ["keniran.core", "keniran.core.*"]
+strict = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
