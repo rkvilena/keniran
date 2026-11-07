@@ -1,0 +1,36 @@
+{
+  "228980": {
+    "success": true,
+    "data": {
+      "type": "tool",
+      "name": "Steamworks Common Redistributables",
+      "steam_appid": 228980,
+      "required_age": 0,
+      "is_free": true,
+      "detailed_description": "The Steamworks Common Redistributables content is required for some games to run.",
+      "about_the_game": "The Steamworks Common Redistributables content is required for some games to run.",
+      "short_description": "The Steamworks Common Redistributables content is required for some games to run.",
+      "supported_languages": "English",
+      "header_image": "https://cdn.akamai.steamstatic.com/steam/apps/228980/header.jpg",
+      "website": null,
+      "developers": ["Valve"],
+      "publishers": ["Valve"],
+      "platforms": {
+        "windows": true,
+        "mac": false,
+        "linux": false
+      },
+      "categories": [
+        {"id": 21, "description": "Downloadable Content"}
+      ],
+      "genres": [
+        {"id": "57", "description": "Utilities"}
+      ],
+      "release_date": {
+        "coming_soon": false,
+        "date": "Sep 24, 2019"
+      },
+      "pc_requirements": []
+    }
+  }
+}
