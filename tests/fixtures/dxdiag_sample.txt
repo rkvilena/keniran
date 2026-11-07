@@ -1,0 +1,138 @@
+------------------
+System Information
+------------------
+Time of this report: 11/6/2026, 21:14:02
+       Machine name: DESKTOP-K3N1R4N
+          Machine Id: {9A1B2C3D-4E5F-6789-ABCD-EF0123456789}
+    Operating System: Windows 11 Pro 64-bit (10.0, Build 22631) (22621.ni_release.220506-1250)
+              Language: English (Regional Setting: English)
+    System Manufacturer: ASUSTeK COMPUTER INC.
+           System Model: System Product Name
+                   BIOS: 2806 (type: UEFI)
+              Processor: Intel(R) Core(TM) i7-9700K CPU @ 3.60GHz (8 CPUs), ~3.6GHz
+                 Memory: 16384MB RAM
+  Available OS Memory: 16232MB RAM
+            Page File: 4864MB used, 21000MB available
+        Windows Dir: C:\WINDOWS
+    DirectX Version: DirectX 12
+DX Setup Parameters: Not found
+   User DPI Setting: 96 DPI (100 percent)
+ System DPI Setting: 96 DPI (100 percent)
+    DWM DPI Scaling: Disabled
+           Miracast: Available, with HDCP
+Microsoft Graphics Hybrid: Not Supported
+ DirectX Database Version: 1.4.7
+         DxDiag Version: 10.00.22621.0001 64bit Unicode
+
+------------
+DxDiag Notes
+------------
+      Display Tab 1: No problems found.
+        Sound Tab 1: No problems found.
+          Input Tab: No problems found.
+
+--------------------
+DirectX Debug Levels
+--------------------
+Direct3D:    0/4 (retail)
+DirectDraw:  0/4 (retail)
+DirectInput: 0/5 (retail)
+DirectMusic: 0/5 (retail)
+DirectPlay:  0/9 (retail)
+DirectSound: 0/5 (retail)
+DirectShow:  0/6 (retail)
+
+---------------
+Display Devices
+---------------
+           Card name: NVIDIA GeForce RTX 3060
+        Manufacturer: NVIDIA
+           Chip type: NVIDIA GeForce RTX 3060
+            DAC type: Integrated RAMDAC
+         Device Type: Full Device (POST)
+          Device Key: Enum\PCI\VEN_10DE&DEV_2504&SUBSYS_881B1043&REV_A1
+       Device Status: 0180200A [DN_DRIVER_LOADED|DN_STARTED|DN_DISABLEABLE|DN_NT_ENUMERATOR|DN_NT_INTERRUPT]
+  Device Problem Code: No Problem
+  Driver Problem Code: Unknown
+       Display Memory: 12125 MB
+     Dedicated Memory: 12288 MB
+        Shared Memory: 8192 MB
+         Current Mode: 1920 x 1080 (32 bit) (144Hz)
+          HDR Support: Supported
+     Display Topology: Internal
+  Display Color Space: DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709
+      Color Primaries: Red(0.640625,0.330078), Green(0.300781,0.601563), Blue(0.150391,0.050781), White(0.312500,0.329102)
+    Monitor Name: Generic PnP Monitor
+   Monitor Model: ASUS VG248
+      Monitor Id: AUS2487
+     Native Mode: 1920 x 1080(p) (60.000Hz)
+     Output Type: Displayport External
+Monitor Capabilities: HDR Supported (BT2020RGB BT2020YCC EOTF2084Supported )
+Display Pixel Format: DISPLAYCONFIG_PIXELFORMAT_32BPP
+      Advanced Color: Not Supported
+         Using DDisplay: Yes
+               WDDM Version: 3.0
+            Driver Name: C:\WINDOWS\System32\DriverStore\FileRepository\nv_dispi.inf_amd64_9b3f4c8a2e5d1f60\nvldumdx.dll
+         Driver File Version: 31.00.0015.5223 (English)
+              Driver Version: 31.0.15.5223
+                 DDI Version: 12
+              Feature Levels: 12_2,12_1,12_0,11_1,11_0,10_1,10_0,9_3,9_2,9_1
+                Driver Model: WDDM 3.0
+         Graphics Preemption: Pixel
+          Compute Preemption: Dispatch
+                    Miracast: Not Supported
+             Detachable GPU: No
+      Hybrid Graphics GPU: Not Supported
+           Power P-states: See DXDiag P-states Tab
+       Restrictable Output: Not
+           Virtualization: Not Supported
+        Driver Attributes: Final Retail
+         WHQL Logo'd: n/a
+     Encode/Decode Formats: Mpeg2, HEVC, H264, AV1
+           DirectX 12: Supported
+                HDR: Supported
+        Vulkan: Not Supported
+         OpenGL: Not Supported
+
+-------------
+Sound Devices
+-------------
+            Description: Speakers (Realtek(R) Audio)
+ Default Sound Playback: Yes
+ Default Voice Playback: Yes
+            Hardware ID: HDAUDIO\FUNC_01&VEN_10EC&DEV_0897&SUBSYS_1043871A&REV_1000
+        Manufacturer ID: 1
+             Product ID: 100
+                   Type: WDM
+            Driver Name: RTKVHD64.sys
+         Driver Version: 6.00.0001.8707 (English)
+      Driver Attributes: Final Retail
+            WHQL Logo'd: n/a
+          Date and Size: 3/16/2020 12:00:00, 6459224 bytes
+
+-------------
+Input Devices
+-------------
+             Keyboard: Standard PS/2 Keyboard
+                 Mouse: USB Optical Mouse
+
+---------------------
+Disk & DVD/CD-ROM Drives
+---------------------
+      Drive: C:
+ Free Space: 151.8 GB
+Total Space: 476.9 GB
+File System: NTFS
+      Model: Samsung SSD 970 EVO Plus 500GB
+
+--------------
+System Devices
+--------------
+      Name: Intel(R) PCI Express Root Port #1 - A330
+Device ID: PCI\VEN_8086&DEV_A330&SUBSYS_86941043&REV_F0\3&11583659&0&E0
+   Driver: C:\WINDOWS\system32\DRIVERS\pci.sys, 10.00.22621.0001 (English), 5/7/2022 00:00:00, 512000 bytes
+
+      Name: Realtek(R) Audio
+Device ID: HDAUDIO\FUNC_01&VEN_10EC&DEV_0897&SUBSYS_1043871A&REV_1000\4&1B2C3D4E&0&0001
+   Driver: C:\WINDOWS\system32\DRIVERS\RTKVHD64.sys, 6.00.0001.8707 (English), 3/16/2020 12:00:00, 6459224 bytes
+
