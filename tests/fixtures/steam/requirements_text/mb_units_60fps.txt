@@ -1,0 +1,7 @@
+Minimum:
+OS: Windows 7 32-bit
+Processor: Intel Core 2 Duo E8400 3.0 GHz or equivalent processor
+Memory: 8192 MB RAM
+Graphics: NVIDIA GeForce GTX 1050 Ti, 4096 MB VRAM
+Storage: 20 GB available space
+Additional Notes: Optimized for 1080p / 60FPS

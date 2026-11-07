@@ -1,0 +1,6 @@
+Minimum:
+OS: Windows 10 64-bit
+Processor: 2.0 GHz quad-core
+Memory: 8 GB RAM
+Graphics: DX11-compatible card with 2 GB VRAM
+Storage: 20 GB available space
