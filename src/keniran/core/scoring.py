@@ -45,6 +45,15 @@ def component_ratio(user_score: float, required_score: float) -> float:
     return user_score / required_score
 
 
+def capacity_ratio(user_gb: float, required_gb: float) -> float:
+    """RAM/VRAM capacity ratio: ``user_gb / required_gb`` (plan/decisions.md §4).
+
+    Reuses :func:`component_ratio` so the same validation applies: the required
+    value must be positive and the user value non-negative.
+    """
+    return component_ratio(user_gb, required_gb)
+
+
 def cpu_ratio(user_cpumark: float, target_cpumark: float) -> float:
     """Multi-thread CPU ratio (primary CPU comparison per §4.5)."""
     return component_ratio(user_cpumark, target_cpumark)
@@ -55,13 +64,23 @@ def gpu_ratio(user_g3d_mark: float, target_g3d_mark: float) -> float:
     return component_ratio(user_g3d_mark, target_g3d_mark)
 
 
-def final_ratio(cpu_ratio_value: float | None, gpu_ratio_value: float | None) -> float | None:
-    """Bottleneck ratio: ``min`` of the available CPU/GPU ratios.
+def final_ratio(
+    cpu_ratio_value: float | None,
+    gpu_ratio_value: float | None,
+    ram_ratio_value: float | None = None,
+    vram_ratio_value: float | None = None,
+) -> float | None:
+    """Bottleneck ratio: ``min`` of the available CPU/GPU/RAM/VRAM ratios.
 
     ``None`` components are treated as unverified and ignored; ``None`` is
-    returned only when neither component could be scored.
+    returned only when no component could be scored. RAM and VRAM capacity
+    ratios join the CPU/GPU benchmark ratios per §4 of plan/decisions.md.
     """
-    available = [ratio for ratio in (cpu_ratio_value, gpu_ratio_value) if ratio is not None]
+    available = [
+        ratio
+        for ratio in (cpu_ratio_value, gpu_ratio_value, ram_ratio_value, vram_ratio_value)
+        if ratio is not None
+    ]
     return min(available) if available else None
 
 
@@ -89,7 +108,7 @@ def display_percent(ratio: float) -> float:
 
 
 def meets_minimum(user_value: float | None, required_value: float | None) -> bool | None:
-    """Direct numeric minimum check for RAM/VRAM/Storage.
+    """Direct numeric minimum check (used for storage in 0.2.0 semantics).
 
     Returns ``None`` when either side is unknown, so callers never mistake
     missing data for a failed check.
@@ -100,17 +119,14 @@ def meets_minimum(user_value: float | None, required_value: float | None) -> boo
 
 
 def minimum_shortfalls(spec: SystemSpec, requirements: GameRequirements) -> list[ComponentName]:
-    """Return the hard-checked components below the published minimum."""
-    checks: tuple[tuple[ComponentName, float | None, float | None], ...] = (
-        (ComponentName.RAM, spec.ram_gb, requirements.ram_gb),
-        (ComponentName.VRAM, spec.vram_gb, requirements.vram_gb),
-        (ComponentName.STORAGE, spec.disk_free_gb, requirements.storage_gb),
-    )
-    return [
-        component
-        for component, user_value, required_value in checks
-        if meets_minimum(user_value, required_value) is False
-    ]
+    """Return the hard-checked components below the published minimum.
+
+    Only storage is a hard shortfall in 0.2.0 semantics (§4): RAM and VRAM are
+    folded into the bottleneck ratio instead, so they are no longer listed.
+    """
+    if meets_minimum(spec.disk_free_gb, requirements.storage_gb) is False:
+        return [ComponentName.STORAGE]
+    return []
 
 
 def st_warning(cpu_ratio_value: float | None, st_ratio: float | None) -> bool:
@@ -124,17 +140,21 @@ def build_verdict(
     cpu_ratio: float | None,
     gpu_ratio: float | None,
     *,
+    ram_ratio: float | None = None,
+    vram_ratio: float | None = None,
     shortfalls: Sequence[ComponentName] = (),
     st_ratio: float | None = None,
 ) -> Verdict:
     """Assemble the final verdict from component ratios and hard checks.
 
-    Any RAM/VRAM/Storage shortfall caps the band at :attr:`VerdictBand.FAIL`
-    regardless of the benchmark ratio; otherwise the band follows
-    :func:`status_band`. A passing CPU with ST ratio below 0.70 raises the
-    informational ``st_warning`` flag.
+    The bottleneck ratio is the ``min`` of the verified CPU, GPU, RAM, and VRAM
+    ratios (plan/decisions.md §4); unverified (``None``) sides are ignored.
+    Only a storage shortfall caps the band at :attr:`VerdictBand.FAIL`
+    regardless of the ratio; otherwise the band follows :func:`status_band`.
+    A passing CPU with ST ratio below 0.70 raises the informational
+    ``st_warning`` flag.
     """
-    ratio = final_ratio(cpu_ratio, gpu_ratio)
+    ratio = final_ratio(cpu_ratio, gpu_ratio, ram_ratio, vram_ratio)
     shortfall_list = list(shortfalls)
 
     if shortfall_list:

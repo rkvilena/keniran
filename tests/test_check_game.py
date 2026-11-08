@@ -183,8 +183,6 @@ def test_hard_shortfalls_cap_verdict_at_fail_despite_good_ratios(
     assert report.verdict.band is VerdictBand.FAIL
     assert report.verdict.spec_shortfall is True
     assert set(report.verdict.shortfall_components) == {
-        ComponentName.RAM,
-        ComponentName.VRAM,
         ComponentName.STORAGE,
     }
 
@@ -222,7 +220,7 @@ def test_unknown_user_vram_is_unverified_and_not_a_shortfall(
 
     requirements = GameRequirements(vram_gb=4.0)
     assert ComponentName.VRAM not in scoring.minimum_shortfalls(spec, requirements)
-    assert ComponentName.VRAM in scoring.minimum_shortfalls(_system_spec(vram_gb=2.0), requirements)
+    assert scoring.minimum_shortfalls(_system_spec(vram_gb=2.0), requirements) == []
 
 
 def test_generic_target_gpu_row_is_unverified_but_verdict_still_produced(

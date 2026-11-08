@@ -165,6 +165,22 @@ def test_final_ratio_is_minimum_of_available_components() -> None:
     assert scoring.final_ratio(None, None) is None
 
 
+def test_final_ratio_includes_capacity_ratios() -> None:
+    assert scoring.final_ratio(1.25, 0.8, ram_ratio_value=0.9) == pytest.approx(0.8)
+    assert scoring.final_ratio(None, None, ram_ratio_value=0.969) == pytest.approx(0.969)
+    assert scoring.final_ratio(1.5, 1.4, ram_ratio_value=0.9, vram_ratio_value=0.95) == pytest.approx(0.9)
+    assert scoring.final_ratio(None, None, ram_ratio_value=None, vram_ratio_value=None) is None
+
+
+def test_capacity_ratio_uses_component_ratio_validation() -> None:
+    assert scoring.capacity_ratio(15.5, 16.0) == pytest.approx(15.5 / 16.0)
+    assert scoring.capacity_ratio(0.0, 8.0) == pytest.approx(0.0)
+    with pytest.raises(ValueError, match="required benchmark score must be positive"):
+        scoring.capacity_ratio(4.0, 0.0)
+    with pytest.raises(ValueError, match="user benchmark score must be non-negative"):
+        scoring.capacity_ratio(-1.0, 8.0)
+
+
 @pytest.mark.parametrize(
     ("ratio", "expected"),
     [
@@ -198,14 +214,51 @@ def test_display_percent_caps_at_one_hundred() -> None:
 
 
 def test_shortfall_caps_a_passing_verdict_at_fail() -> None:
-    verdict = scoring.build_verdict(1.5, 1.25, shortfalls=[ComponentName.RAM])
+    verdict = scoring.build_verdict(1.5, 1.25, shortfalls=[ComponentName.STORAGE])
 
     assert verdict.band is VerdictBand.FAIL
     assert verdict.spec_shortfall is True
-    assert verdict.shortfall_components == [ComponentName.RAM]
+    assert verdict.shortfall_components == [ComponentName.STORAGE]
     assert verdict.ratio == pytest.approx(1.25)
     assert verdict.display_percent == pytest.approx(100.0)
-    assert "Fail (spec shortfall: RAM)" in verdict.percentage_text
+    assert "Fail (spec shortfall: Storage)" in verdict.percentage_text
+
+
+def test_ram_capacity_ratio_drives_verdict_band() -> None:
+    ram_ratio = scoring.capacity_ratio(15.5, 16.0)
+    verdict = scoring.build_verdict(None, None, ram_ratio=ram_ratio)
+
+    assert ram_ratio == pytest.approx(0.969, abs=0.001)
+    assert verdict.band is VerdictBand.BORDERLINE
+    assert verdict.ratio == pytest.approx(ram_ratio)
+    assert verdict.spec_shortfall is False
+
+
+def test_vram_capacity_ratio_drives_verdict_band() -> None:
+    vram_ratio = scoring.capacity_ratio(4.0, 6.0)
+    verdict = scoring.build_verdict(None, None, vram_ratio=vram_ratio)
+
+    assert vram_ratio == pytest.approx(0.667, abs=0.001)
+    assert verdict.band is VerdictBand.POOR
+    assert verdict.ratio == pytest.approx(vram_ratio)
+
+
+def test_low_ram_ratio_drives_unplayable_band() -> None:
+    ram_ratio = scoring.capacity_ratio(3.5, 8.0)
+    verdict = scoring.build_verdict(1.5, 1.5, ram_ratio=ram_ratio)
+
+    assert ram_ratio == pytest.approx(0.44, rel=0.01)
+    assert verdict.band is VerdictBand.UNPLAYABLE
+    assert verdict.ratio == pytest.approx(ram_ratio)
+
+
+def test_unverified_ram_does_not_cap_passing_verdict() -> None:
+    verdict = scoring.build_verdict(1.5, 1.25, ram_ratio=None, vram_ratio=None)
+
+    assert verdict.band is VerdictBand.PASS
+    assert verdict.spec_shortfall is False
+    assert verdict.shortfall_components == []
+    assert verdict.percentage_text == "100% of the game's minimum requirement (Pass — meets requirement)"
 
 
 def test_st_warning_only_when_multithread_cpu_passes() -> None:
@@ -233,9 +286,10 @@ def test_meets_minimum_and_minimum_shortfalls() -> None:
 
     requirements = GameRequirements(ram_gb=16.0, vram_gb=2.0, storage_gb=150.0)
     assert scoring.minimum_shortfalls(_spec(), requirements) == [
-        ComponentName.RAM,
         ComponentName.STORAGE,
     ]
+    requirements_passing_storage = GameRequirements(ram_gb=4.0, vram_gb=2.0, storage_gb=50.0)
+    assert scoring.minimum_shortfalls(_spec(), requirements_passing_storage) == []
     assert scoring.minimum_shortfalls(_spec(), GameRequirements()) == []
 
 
