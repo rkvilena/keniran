@@ -12,6 +12,25 @@ Append-only. Newest first within each release block. Every entry inherits the ru
   `0.2.1/linux-storage`, prefix `LSTO`; release chores prefix `REL21`). Offered the
   user the reopen-0.2.0 option; they chose the fresh release to keep version
   labels canonical. (source: user interview 2026-11-08)
+- The WSL-smoke **unnamed-GPU fuzzy-match finding is promoted from backlog into
+  0.2.1** as `0.2.1/bench-honesty` (prefix `HON`), parallel-safe with linux-storage
+  (disjoint files). (source: user request 2026-11-08)
+- Honesty gate placement: **lookup entry, not scoring** — placeholder-shaped names
+  are classified model-less *before* Stage 1/2 and return
+  `MatchResult(matched_by="unverified")`; `_match_score()` and the ratio pipeline
+  stay untouched. Root cause verified in code: `Device 008e` passes
+  `has_model_number()` (digits survive), shares one token with a real DB row, and
+  its score releases regardless of `score_ratio`. (source: user interview
+  2026-11-08 + code audit same day)
+- **Placeholder denylist, not a marketing whitelist**: garbage = normalized name
+  matching lspci/USB placeholder shapes (`device <hex>`, bare 4+-char hex,
+  `unknown device`). Rejected the whitelist approach (require ≥1 marketing token)
+  because real names missing from the list would false-degrade to unverified — the
+  opposite failure mode. (source: user interview 2026-11-08)
+- **`best_guess` stays scorable**: sub-gate fuzzy matches keep releasing scores
+  with the confidence badge, as today; only placeholder garbage is rejected.
+  Windows dxdiag names unaffected; no existing test expectations change. (source:
+  user interview 2026-11-08)
 - Linux storage wiring = **reuse the shared helper, no helper edits**:
   `select_storage_free` (STO-001 contract) stays pure and backend-agnostic; all
   Linux-specific filtering lives in the Linux gatherer, mirroring
