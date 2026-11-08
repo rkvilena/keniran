@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "keniran"
-version = "0.1.0"
+version = "0.2.0"
 description = "Can I run it? Audit this machine against a Steam game's minimum requirements."
 requires-python = ">=3.11,<3.12"
 dependencies = [
