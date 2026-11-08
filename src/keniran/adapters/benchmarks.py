@@ -59,6 +59,19 @@ _WHITESPACE_RE: Final = re.compile(r"\s+")
 _TOKEN_RE: Final = re.compile(r"[a-z0-9+]+")
 _MOBILE_RE: Final = re.compile(r"\b(?:mobile|laptop(?:\s+gpu)?)\b")
 
+# lspci/USB-style placeholder shapes: names a probe emits when it cannot
+# identify the part. Real marketing names never match these shapes.
+_PLACEHOLDER_NAME_PATTERNS: Final[tuple[re.Pattern[str], ...]] = (
+    # "Device 008e", "device 0x25a2": a "device" keyword plus a hex id.
+    re.compile(r"\bdevice\s+(?:0x)?[0-9a-f]+\b"),
+    # Whole-name bare hex ids: "008e", "0x25a2", "0x1234". A bare token with
+    # only decimal digits ("3080") stays a real shorthand model number; hex
+    # letters or an "0x" prefix mark it as probe noise.
+    re.compile(r"^(?:0x[0-9a-f]{4,}|(?=[0-9a-f]*[a-f])[0-9a-f]{4,})$"),
+    # Failed-probe phrasing: "unknown", "unknown device", "unknown pci device".
+    re.compile(r"^unknown\b"),
+)
+
 _MODEL_FEATURE_PATTERNS: Final[tuple[re.Pattern[str], ...]] = (
     # API/interface levels: "DX11", "DirectX 12", "OpenGL 4.6", "SM 6.0".
     re.compile(r"\b(?:dx|directx|opengl|vulkan|sm|pcie|pci)\s*\d+(?:\.\d+)?\b"),
@@ -139,6 +152,20 @@ def has_model_number(name_text: str) -> bool:
     return any(character.isdigit() for character in text)
 
 
+def _is_placeholder_name(name_text: str) -> bool:
+    """Return whether *name_text* is a probe placeholder, not a model name.
+
+    Normalization runs first so trademark/clock noise (``(R)``, ``@ 2.8GHz``)
+    cannot mask a placeholder shape. Shapes are lspci/USB probe artifacts:
+    ``device <hex>``, a whole-name bare hex id, and ``unknown`` phrasing. A
+    bare hex id must contain a hex letter (``008e``) or an ``0x`` prefix
+    (``0x25a2``); pure-decimal shorthand such as ``3080`` is a real model
+    number and stays scorable.
+    """
+    key = normalize_name(name_text)
+    return any(pattern.search(key) for pattern in _PLACEHOLDER_NAME_PATTERNS)
+
+
 def lookup(
     db: Mapping[str, Any] | Sequence[Mapping[str, Any]],
     name_text: str,
@@ -158,13 +185,14 @@ def lookup(
     - ``"fuzzy"`` - Stage 2 hit at or above :data:`CONFIDENCE_GATE`.
     - ``"best_guess"`` - Stage 2 hit below the gate but with a model number;
       callers show the confidence badge instead of prompting.
-    - ``"unverified"`` - generic text with no model number; never guessed.
+    - ``"unverified"`` - generic or placeholder-shaped text with no usable
+      model number; never guessed.
     - ``"none"`` - no candidate shares a token with the input.
     """
     if kind not in _VALID_KINDS:
         msg = f"unsupported benchmark kind: {kind!r}"
         raise ValueError(msg)
-    if not has_model_number(name_text):
+    if _is_placeholder_name(name_text) or not has_model_number(name_text):
         return MatchResult(matched_by="unverified")
 
     key = normalize_name(name_text)
