@@ -8,6 +8,7 @@ keeps the asserted strings anchored to the canonical sources.
 
 from __future__ import annotations
 
+from importlib.metadata import version
 from io import StringIO
 
 import pytest
@@ -380,7 +381,7 @@ def test_version_flag_still_prints_installed_version(
     result = CliRunner().invoke(app, ["--version"])
 
     assert result.exit_code == 0, result.output
-    assert result.stdout.strip() == "keniran 0.1.0"
+    assert result.stdout.strip() == f"keniran {version('keniran')}"
     assert calls == []
 
 
