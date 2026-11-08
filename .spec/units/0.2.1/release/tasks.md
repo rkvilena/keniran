@@ -1,6 +1,7 @@
 # Tasks — 0.2.1 (release chores)
 
-- [ ] REL21-001: Version bump to 0.2.1
+- [x] REL21-001: Version bump to 0.2.1
+  status: done (commit db9fa59)
   depends: -
   gated: 0.2.1/linux-storage, 0.2.1/bench-honesty
   files: pyproject.toml
@@ -13,7 +14,9 @@
   out-of-scope: changelog file creation (doc sweep is REL21-002); plan/decisions.md
     (also REL21-002)
 
-- [ ] REL21-002: Docs sweep — README + plan/decisions.md
+- [x] REL21-002: Docs sweep — README + plan/decisions.md
+  status: done (commit d0e994e — README.md; plan/decisions.md updated on disk only,
+  gitignored by design)
   depends: -
   gated: 0.2.1/linux-storage, 0.2.1/bench-honesty
   files: README.md, plan/decisions.md
@@ -41,7 +44,8 @@
   out-of-scope: detailed-flow.md / benchmark-db.md (no contradiction expected;
     surgical line fixes only if revision reveals one)
 
-- [ ] REL21-003: Full acceptance gate run for 0.2.1
+- [x] REL21-003: Full acceptance gate run for 0.2.1
+  status: done (no commit — verification chore; run log 2026-11-08)
   depends: -
   gated: 0.2.1/linux-storage, 0.2.1/bench-honesty
   files: (none — verification only)
