@@ -101,7 +101,7 @@ def meets_minimum(user_value: float | None, required_value: float | None) -> boo
 
 def minimum_shortfalls(spec: SystemSpec, requirements: GameRequirements) -> list[ComponentName]:
     """Return the hard-checked components below the published minimum."""
-    checks: tuple[tuple[ComponentName, float, float | None], ...] = (
+    checks: tuple[tuple[ComponentName, float | None, float | None], ...] = (
         (ComponentName.RAM, spec.ram_gb, requirements.ram_gb),
         (ComponentName.VRAM, spec.vram_gb, requirements.vram_gb),
         (ComponentName.STORAGE, spec.disk_free_gb, requirements.storage_gb),

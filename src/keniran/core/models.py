@@ -34,6 +34,9 @@ class SystemSpec(BaseModel):
 
     ``platform`` records the ``sys.platform`` of the audited machine so a cache
     written on another OS (e.g. Windows vs. WSL) is re-audited instead of reused.
+
+    ``vram_gb`` is optional: ``None`` means the audit could not establish the
+    dedicated VRAM, so reports mark the VRAM row unverified instead of guessing.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -42,7 +45,7 @@ class SystemSpec(BaseModel):
     cpu_name: str
     ram_gb: float = Field(ge=0)
     gpu_name: str
-    vram_gb: float = Field(ge=0)
+    vram_gb: float | None = Field(default=None, ge=0)
     disk_free_gb: float = Field(ge=0)
     audited_at: datetime
 

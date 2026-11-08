@@ -178,14 +178,14 @@ def _benchmark_row(
 
 def _hard_check_row(
     component: ComponentName,
-    user_value: float,
+    user_value: float | None,
     required_value: float | None,
 ) -> ComponentRow:
     """Build one RAM/VRAM/Storage row from the direct numeric minimum check."""
     passed = scoring.meets_minimum(user_value, required_value)
     return ComponentRow(
         component=component,
-        user_value=_format_gigabytes(user_value),
+        user_value=(_format_gigabytes(user_value) if user_value is not None else UNVERIFIED_VALUE),
         required_value=(
             _format_gigabytes(required_value) if required_value is not None else NOT_PUBLISHED_VALUE
         ),

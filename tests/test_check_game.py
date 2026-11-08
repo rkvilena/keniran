@@ -21,6 +21,7 @@ import pytest
 from keniran.adapters import steam
 from keniran.adapters.llm.base import RequirementExtractor
 from keniran.adapters.steam import SteamRequirements
+from keniran.core import scoring
 from keniran.core.models import (
     ComponentName,
     GameRequirements,
@@ -56,7 +57,7 @@ def _system_spec(
     cpu: str = "Intel Core i7-4770",
     ram_gb: float = 16.0,
     gpu: str = "GTX 1060 6GB",
-    vram_gb: float = 6.0,
+    vram_gb: float | None = 6.0,
     disk_free_gb: float = 100.0,
 ) -> SystemSpec:
     return SystemSpec(
@@ -191,6 +192,37 @@ def test_hard_shortfalls_cap_verdict_at_fail_despite_good_ratios(
     assert rows[ComponentName.RAM].passed is False
     assert rows[ComponentName.VRAM].passed is False
     assert rows[ComponentName.STORAGE].passed is False
+
+
+def test_system_spec_accepts_unknown_vram() -> None:
+    spec = _system_spec(vram_gb=None)
+
+    assert spec.vram_gb is None
+    assert SystemSpec.model_validate(spec.model_dump(mode="json")) == spec
+
+
+def test_unknown_user_vram_is_unverified_and_not_a_shortfall(
+    benchmark_db: dict[str, Any],
+) -> None:
+    html = _requirements_html(gpu="NVIDIA GeForce GTX 650 Ti, 4 GB VRAM")
+    spec = _system_spec(vram_gb=None)
+
+    report = _check(benchmark_db, html=html, spec=spec)
+
+    vram_row = next(row for row in report.components if row.component is ComponentName.VRAM)
+    assert vram_row.passed is None
+    assert vram_row.unverified is True
+    assert vram_row.user_value == "unverified"
+    assert vram_row.required_value == "4 GB"
+
+    assert report.verdict is not None
+    assert report.verdict.band is VerdictBand.PASS
+    assert report.verdict.spec_shortfall is False
+    assert ComponentName.VRAM not in report.verdict.shortfall_components
+
+    requirements = GameRequirements(vram_gb=4.0)
+    assert ComponentName.VRAM not in scoring.minimum_shortfalls(spec, requirements)
+    assert ComponentName.VRAM in scoring.minimum_shortfalls(_system_spec(vram_gb=2.0), requirements)
 
 
 def test_generic_target_gpu_row_is_unverified_but_verdict_still_produced(
