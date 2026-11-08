@@ -9,7 +9,9 @@ fixtures without reading ``/proc`` or spawning tools.
 
 The honesty gate (``plan/decisions.md`` §2) applies: malformed or absent data
 returns ``None`` instead of raising, and the caller degrades that field to
-``unverified`` rather than fabricating a value.
+``unverified`` rather than fabricating a value. Free space is measured on the
+best eligible local fixed mount via the shared any-mount helper (root ``/`` is
+a guaranteed candidate, not the only one), parity with the Windows rule.
 
 **WSL ≠ native Linux caveat.** ``sys.platform`` is ``"linux"`` under WSL2 too,
 so a spec audited inside WSL is cached as ``platform="linux"`` and reused by
@@ -36,7 +38,7 @@ from typing import Final, Protocol, cast
 import psutil  # type: ignore[import-untyped]
 
 from keniran.adapters.hardware import windows
-from keniran.adapters.hardware.storage import Partition
+from keniran.adapters.hardware.storage import Partition, select_storage_free
 from keniran.adapters.hardware.windows import (
     DEFAULT_SPEC_PATH,
     HardwareAuditError,
@@ -352,20 +354,6 @@ def _psutil_total_ram_gb() -> float | None:
         return None
 
 
-def _disk_free_gb() -> float:
-    """Return free space in GB on the Linux root filesystem.
-
-    Unlike the CPU/RAM/GPU/VRAM fields there is no optional representation
-    for disk space in :class:`SystemSpec`, so an unexpected psutil failure
-    degrades to ``0.0`` rather than aborting the audit.
-    """
-    try:
-        free_bytes = float(psutil.disk_usage("/").free)
-        return round(free_bytes / _BYTES_PER_GB, 2)
-    except (OSError, ValueError, AttributeError):
-        return 0.0
-
-
 def _gather_cpu_name() -> str | None:
     """CPU chain: ``/proc/cpuinfo`` first, ``lscpu`` as the fallback rung."""
     text = _read_proc(PROC_CPUINFO)
@@ -576,13 +564,20 @@ def audit(*, path: Path = DEFAULT_SPEC_PATH) -> SystemSpec:
     chains — CPU ``/proc`` → ``lscpu``, RAM ``/proc`` → ``psutil``, GPU
     ``lspci`` → ``nvidia-smi``, VRAM ``nvidia-smi`` → ``vulkaninfo`` →
     ``None`` — stamps it with ``sys.platform`` and writes it through the
-    shared :func:`keniran.adapters.hardware.windows.save`. Missing tools,
-    non-zero exits, and malformed output each degrade only their own field
-    to ``None``; the audit raises no :class:`HardwareAuditError` for tool
-    absence. Only a truly empty spec (no CPU **and** no RAM) fails, via
-    :class:`LinuxAuditError`. A non-POSIX host (real Windows, or a test host
-    merely pretending to be Linux) has neither ``/proc`` nor the tooling, so
-    it raises :class:`UnsupportedPlatformError` up front.
+    shared :func:`keniran.adapters.hardware.windows.save`. Free space is
+    measured on the best eligible local fixed mount via
+    :func:`~keniran.adapters.hardware.storage.select_storage_free`, so root
+    ``/`` is a guaranteed candidate but no longer the only one — the
+    user-visible parity with the Windows any-mount rule — and the winning
+    mount is recorded in ``storage_used_mount``. When nothing is measurable
+    both storage fields stay ``None`` (an unverified row), never a fabricated
+    ``0.0``. Missing tools, non-zero exits, and malformed output each degrade
+    only their own field to ``None``; the audit raises no
+    :class:`HardwareAuditError` for tool absence. Only a truly empty spec (no
+    CPU **and** no RAM) fails, via :class:`LinuxAuditError`. A non-POSIX host
+    (real Windows, or a test host merely pretending to be Linux) has neither
+    ``/proc`` nor the tooling, so it raises :class:`UnsupportedPlatformError`
+    up front.
     """
     if os.name != "posix":
         msg = (
@@ -601,13 +596,15 @@ def audit(*, path: Path = DEFAULT_SPEC_PATH) -> SystemSpec:
     # degraded spec (e.g. CPU/RAM present but the GPU chain broken) reaches
     # the required-field pydantic validation below and fails there with a
     # ValidationError, never a HardwareAuditError.
+    storage = select_storage_free(None, _collect_partitions())
     spec = SystemSpec(
         platform=sys.platform,
         cpu_name=cast(str, cpu_name),
         ram_gb=cast(float, ram_gb),
         gpu_name=cast(str, _gather_gpu_name()),
         vram_gb=_gather_vram_gb(),
-        disk_free_gb=_disk_free_gb(),
+        disk_free_gb=storage.free_gb,
+        storage_used_mount=storage.mount,
         audited_at=datetime.now(UTC),
     )
     save(spec, path=path)

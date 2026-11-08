@@ -27,7 +27,7 @@ from keniran.adapters.hardware.linux import (
     _gather_vram_gb,
     filter_linux_partitions,
 )
-from keniran.adapters.hardware.storage import select_storage_free
+from keniran.adapters.hardware.storage import Partition, select_storage_free
 from keniran.core.models import SystemSpec
 
 CPUINFO_TEXT = "processor\t: 0\nmodel name\t: Intel(R) Core(TM) i7-9700K CPU @ 3.60GHz\n"
@@ -134,11 +134,27 @@ def _install_runner(
     return calls
 
 
-def _install_posix_host(monkeypatch: pytest.MonkeyPatch, free_gb: float = 148.25) -> None:
+def _install_partitions(
+    monkeypatch: pytest.MonkeyPatch, partitions: list[Partition] | None = None
+) -> None:
+    """Replace the psutil partition collection with an injected list."""
+    if partitions is None:
+        partitions = [
+            Partition(
+                mountpoint="/",
+                fstype="ext4",
+                opts=("rw", "relatime"),
+                free_gb=148.25,
+            )
+        ]
+    monkeypatch.setattr(linux, "_collect_partitions", lambda: partitions)
+
+
+def _install_posix_host(monkeypatch: pytest.MonkeyPatch) -> None:
     """Make the linux backend believe it runs on a POSIX host; fake the disk."""
     monkeypatch.setattr(linux, "os", types.SimpleNamespace(name="posix"))
     monkeypatch.setattr(linux.sys, "platform", "linux")
-    monkeypatch.setattr(linux, "_disk_free_gb", lambda: free_gb)
+    _install_partitions(monkeypatch)
 
 
 # --- CPU chain: /proc -> lscpu ------------------------------------------------
@@ -630,12 +646,63 @@ def test_audit_builds_spec_from_healthy_chains_and_saves(
     assert spec.gpu_name == "GeForce RTX 3080"
     assert spec.vram_gb == 8.0
     assert spec.disk_free_gb == 148.25
+    assert spec.storage_used_mount == "/"
     assert spec.audited_at.tzinfo is not None
 
     assert path.is_file()
     payload = json.loads(path.read_text(encoding="utf-8"))
     assert payload["platform"] == "linux"
+    assert payload["storage_used_mount"] == "/"
     assert datetime.fromisoformat(payload["audited_at"]).tzinfo is not None
+
+
+def test_audit_picks_largest_free_mount_across_multiple_local_mounts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _install_healthy_chains(tmp_path, monkeypatch)
+    _install_partitions(
+        monkeypatch,
+        [
+            Partition(mountpoint="/", fstype="ext4", opts=("rw", "relatime"), free_gb=20.0),
+            Partition(mountpoint="/games", fstype="ext4", opts=("rw",), free_gb=200.0),
+        ],
+    )
+    path = tmp_path / "generated" / "system_spec.json"
+
+    spec = linux.audit(path=path)
+
+    # Root / is a guaranteed candidate, not the only one: parity with the
+    # Windows any-local-mount rule lets a roomier data mount win.
+    assert spec.disk_free_gb == 200.0
+    assert spec.storage_used_mount == "/games"
+
+
+@pytest.mark.parametrize(
+    "partitions",
+    [
+        [],
+        [Partition(mountpoint="/", fstype="ext4", opts=("rw", "relatime"), free_gb=None)],
+    ],
+    ids=["no-partitions", "unmeasurable-root"],
+)
+def test_audit_without_any_measurable_mount_records_unverified(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    partitions: list[Partition],
+) -> None:
+    _install_healthy_chains(tmp_path, monkeypatch)
+    _install_partitions(monkeypatch, partitions)
+    path = tmp_path / "generated" / "system_spec.json"
+
+    spec = linux.audit(path=path)
+
+    # The honest None state (downstream _hard_check_row renders it unverified),
+    # never the legacy fabricated 0.0.
+    assert spec.disk_free_gb is None
+    assert spec.storage_used_mount is None
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    assert payload["disk_free_gb"] is None
+    assert payload["storage_used_mount"] is None
 
 
 def test_audit_reuses_shared_atomic_save(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
