@@ -10,13 +10,37 @@ fixtures without reading ``/proc`` or spawning tools.
 The honesty gate (``plan/decisions.md`` §2) applies: malformed or absent data
 returns ``None`` instead of raising, and the caller degrades that field to
 ``unverified`` rather than fabricating a value.
+
+**WSL ≠ native Linux caveat.** ``sys.platform`` is ``"linux"`` under WSL2 too,
+so a spec audited inside WSL is cached as ``platform="linux"`` and reused by
+native Linux runs of the same version — the two are *not* equivalent: WSL2
+exposes the GPU through the paravirtualized ``/dev/dxg`` device (so ``lspci``
+sees no discrete card and ``nvidia-smi`` works only with the WSL driver
+stack), and ``.wslconfig`` can cap guest RAM, making ``/proc/meminfo``
+under-report the physical machine. Treat a WSL-audited spec as a WSL spec.
 """
 
 from __future__ import annotations
 
 import json
+import os
 import re
-from typing import Final
+import subprocess
+import sys
+from collections.abc import Sequence
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Final, cast
+
+import psutil  # type: ignore[import-untyped]
+
+from keniran.adapters.hardware import windows
+from keniran.adapters.hardware.windows import (
+    DEFAULT_SPEC_PATH,
+    HardwareAuditError,
+    UnsupportedPlatformError,
+)
+from keniran.core.models import SystemSpec
 
 _WHITESPACE_RE: Final = re.compile(r"\s+")
 _CLOCK_NOISE_RE: Final = re.compile(r"\s*@\s*\d+(?:\.\d+)?\s*(?:GHz|MHz)", re.IGNORECASE)
@@ -269,3 +293,189 @@ def _clean_linux_name(value: str) -> str:
     name = _PCI_REV_RE.sub(" ", name)
     name = _LITE_HASH_RATE_RE.sub(" ", name)
     return _WHITESPACE_RE.sub(" ", name).strip()
+
+
+# --- Audit orchestration (LIN-003) -------------------------------------------
+
+LSPCI_EXECUTABLE: Final = "lspci"
+NVIDIA_SMI_EXECUTABLE: Final = "nvidia-smi"
+VULKANINFO_EXECUTABLE: Final = "vulkaninfo"
+TOOL_TIMEOUT_SECONDS: Final = 30.0
+
+PROC_CPUINFO: Final = Path("/proc/cpuinfo")
+PROC_MEMINFO: Final = Path("/proc/meminfo")
+
+
+class LinuxAuditError(HardwareAuditError):
+    """The Linux audit produced an unusable spec (no CPU *and* no RAM found)."""
+
+
+def _run_tool(argv: Sequence[str]) -> str | None:
+    """Run *argv* and return stdout, or ``None`` on any tool failure.
+
+    A missing executable, a non-zero exit, a timeout, or any OS error counts
+    as "tool absent" and degrades to ``None`` — it must never raise. stdout
+    text is handed to the pure parsers, which treat malformed content the
+    same way.
+    """
+    try:
+        completed = subprocess.run(
+            list(argv),
+            capture_output=True,
+            text=True,
+            timeout=TOOL_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except (FileNotFoundError, PermissionError, subprocess.TimeoutExpired, OSError):
+        return None
+    if completed.returncode != 0:
+        return None
+    return completed.stdout
+
+
+def _read_proc(path: Path) -> str | None:
+    """Return the text of a ``/proc`` file, or ``None`` when it is unreadable."""
+    try:
+        return path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+
+
+def _psutil_total_ram_gb() -> float | None:
+    """Return total RAM in GB from :mod:`psutil`, or ``None`` when it fails."""
+    try:
+        total_bytes = float(psutil.virtual_memory().total)
+        return round(total_bytes / _BYTES_PER_GB, 2)
+    except (OSError, ValueError, AttributeError):
+        return None
+
+
+def _disk_free_gb() -> float:
+    """Return free space in GB on the Linux root filesystem.
+
+    Unlike the CPU/RAM/GPU/VRAM fields there is no optional representation
+    for disk space in :class:`SystemSpec`, so an unexpected psutil failure
+    degrades to ``0.0`` rather than aborting the audit.
+    """
+    try:
+        free_bytes = float(psutil.disk_usage("/").free)
+        return round(free_bytes / _BYTES_PER_GB, 2)
+    except (OSError, ValueError, AttributeError):
+        return 0.0
+
+
+def _gather_cpu_name() -> str | None:
+    """CPU chain: ``/proc/cpuinfo`` first, ``lscpu`` as the fallback rung."""
+    text = _read_proc(PROC_CPUINFO)
+    if text is not None:
+        name = parse_proc_cpuinfo(text)
+        if name is not None:
+            return name
+    lscpu_text = _run_tool(("lscpu",))
+    if lscpu_text is not None:
+        return parse_proc_cpuinfo(lscpu_text)
+    return None
+
+
+def _gather_ram_gb() -> float | None:
+    """RAM chain: ``/proc/meminfo`` first, :mod:`psutil` as the fallback rung."""
+    text = _read_proc(PROC_MEMINFO)
+    if text is not None:
+        ram_gb = parse_proc_meminfo(text)
+        if ram_gb is not None:
+            return ram_gb
+    return _psutil_total_ram_gb()
+
+
+def _gather_gpu_name() -> str | None:
+    """GPU chain: ``lspci -mm`` first, ``nvidia-smi`` as the fallback rung."""
+    lspci_text = _run_tool((LSPCI_EXECUTABLE, "-mm"))
+    if lspci_text is not None:
+        name = parse_lspci(lspci_text)
+        if name is not None:
+            return name
+    smi_text = _run_tool((NVIDIA_SMI_EXECUTABLE, "--query-gpu=name", "--format=csv,noheader"))
+    if smi_text is not None:
+        lines = smi_text.splitlines()
+        if lines:
+            name = _clean_linux_name(lines[0])
+            if name:
+                return name
+    return None
+
+
+def _gather_vram_gb() -> float | None:
+    """VRAM chain: ``nvidia-smi`` first, ``vulkaninfo`` second, else ``None``."""
+    smi_text = _run_tool((NVIDIA_SMI_EXECUTABLE,))
+    if smi_text is not None:
+        vram_gb = parse_nvidia_smi_vram(smi_text)
+        if vram_gb is not None:
+            return vram_gb
+    vulkan_text = _run_tool((VULKANINFO_EXECUTABLE, "--summary"))
+    if vulkan_text is not None:
+        return parse_vulkaninfo(vulkan_text)
+    return None
+
+
+def audit(*, path: Path = DEFAULT_SPEC_PATH) -> SystemSpec:
+    """Run the Linux audit chains, persist the result, and return it.
+
+    Builds a :class:`~keniran.core.models.SystemSpec` from the fallback
+    chains — CPU ``/proc`` → ``lscpu``, RAM ``/proc`` → ``psutil``, GPU
+    ``lspci`` → ``nvidia-smi``, VRAM ``nvidia-smi`` → ``vulkaninfo`` →
+    ``None`` — stamps it with ``sys.platform`` and writes it through the
+    shared :func:`keniran.adapters.hardware.windows.save`. Missing tools,
+    non-zero exits, and malformed output each degrade only their own field
+    to ``None``; the audit raises no :class:`HardwareAuditError` for tool
+    absence. Only a truly empty spec (no CPU **and** no RAM) fails, via
+    :class:`LinuxAuditError`. A non-POSIX host (real Windows, or a test host
+    merely pretending to be Linux) has neither ``/proc`` nor the tooling, so
+    it raises :class:`UnsupportedPlatformError` up front.
+    """
+    if os.name != "posix":
+        msg = (
+            f"the linux hardware audit requires a POSIX host (native Linux or WSL), "
+            f"not {os.name} (Windows-only tooling such as dxdiag is unavailable there)"
+        )
+        raise UnsupportedPlatformError(msg)
+
+    cpu_name = _gather_cpu_name()
+    ram_gb = _gather_ram_gb()
+    if cpu_name is None and ram_gb is None:
+        msg = "linux audit found neither CPU nor RAM information; spec is empty"
+        raise LinuxAuditError(msg)
+
+    # The honesty gate degrades each field independently, so a partially
+    # degraded spec (e.g. CPU/RAM present but the GPU chain broken) reaches
+    # the required-field pydantic validation below and fails there with a
+    # ValidationError, never a HardwareAuditError.
+    spec = SystemSpec(
+        platform=sys.platform,
+        cpu_name=cast(str, cpu_name),
+        ram_gb=cast(float, ram_gb),
+        gpu_name=cast(str, _gather_gpu_name()),
+        vram_gb=_gather_vram_gb(),
+        disk_free_gb=_disk_free_gb(),
+        audited_at=datetime.now(UTC),
+    )
+    save(spec, path=path)
+    return spec
+
+
+def load(*, refresh: bool = False, path: Path = DEFAULT_SPEC_PATH) -> SystemSpec:
+    """Return the cached audit, running a fresh Linux audit only when needed.
+
+    Mirrors :func:`keniran.adapters.hardware.windows.load`: the cache is read
+    through the shared reader (which re-audits on a ``platform`` mismatch or
+    a legacy cache without the key), and ``refresh=True`` always re-audits.
+    """
+    if not refresh:
+        cached = windows._read_cache(path)
+        if cached is not None:
+            return cached
+    return audit(path=path)
+
+
+def save(spec: SystemSpec, *, path: Path = DEFAULT_SPEC_PATH) -> Path:
+    """Persist *spec* atomically via the shared Windows-backend writer."""
+    return windows.save(spec, path=path)

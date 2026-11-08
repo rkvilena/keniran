@@ -1,9 +1,10 @@
 """Platform-dispatched hardware audit adapters.
 
-The Windows implementation lives in :mod:`keniran.adapters.hardware.windows`.
-This facade re-exports its public API and selects the backend when platform
-specific work is requested, so the package imports cleanly everywhere. Backends
-stamp :class:`~keniran.core.models.SystemSpec` with ``sys.platform``; a cache
+The Windows implementation lives in :mod:`keniran.adapters.hardware.windows`
+and the Linux one in :mod:`keniran.adapters.hardware.linux`. This facade
+re-exports their public API and selects the backend when platform specific
+work is requested, so the package imports cleanly everywhere. Backends stamp
+:class:`~keniran.core.models.SystemSpec` with ``sys.platform``; a cache
 written on another platform (or a legacy cache without the key) is re-audited
 rather than reused.
 """
@@ -13,7 +14,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from keniran.adapters.hardware import windows
+from keniran.adapters.hardware import linux, windows
 from keniran.adapters.hardware.windows import (
     DEFAULT_SPEC_PATH,
     DXDIAG_EXECUTABLE,
@@ -44,36 +45,40 @@ __all__ = [
     "HardwareCacheError",
     "UnsupportedPlatformError",
     "audit",
+    "linux",
     "load",
     "parse_dxdiag",
     "save",
 ]
 
 
-def _require_windows_backend() -> None:
-    """Raise :class:`UnsupportedPlatformError` when no backend is available."""
-    if sys.platform != "win32":
-        msg = f"hardware audit requires Windows: dxdiag is not available on {sys.platform}"
-        raise UnsupportedPlatformError(msg)
+def _current_platform() -> str:
+    """Return ``sys.platform`` without mypy's per-OS literal narrowing."""
+    return str(sys.platform)
 
 
 def audit(*, path: Path = DEFAULT_SPEC_PATH) -> SystemSpec:
-    """Run a fresh dxdiag audit, persist the result, and return it.
+    """Run a fresh audit, persist the result, and return it.
 
-    Dispatches to the Windows backend, which stamps the spec with
-    ``sys.platform``; other platforms raise :class:`UnsupportedPlatformError`.
+    Dispatches to the backend for ``sys.platform``: dxdiag on Windows, the
+    ``/proc``/``lspci``/``nvidia-smi`` chains elsewhere. The chosen backend
+    stamps the spec with ``sys.platform``.
     """
-    _require_windows_backend()
-    return windows.audit(path=path)
+    if _current_platform() == "win32":
+        return windows.audit(path=path)
+    return linux.audit(path=path)
 
 
 def load(*, refresh: bool = False, path: Path = DEFAULT_SPEC_PATH) -> SystemSpec:
     """Return the cached audit, running a fresh one only when needed.
 
     The cache is reused only when its ``platform`` matches the current
-    ``sys.platform``; a mismatch or legacy cache without the key re-audits.
+    ``sys.platform``; a mismatch or legacy cache without the key re-audits
+    through the current platform's backend.
     """
-    return windows.load(refresh=refresh, path=path)
+    if _current_platform() == "win32":
+        return windows.load(refresh=refresh, path=path)
+    return linux.load(refresh=refresh, path=path)
 
 
 def save(spec: SystemSpec, *, path: Path = DEFAULT_SPEC_PATH) -> Path:
