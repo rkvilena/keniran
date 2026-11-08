@@ -119,5 +119,18 @@ Append-only. Newest first within each release block. Every entry inherits the ru
   verdict, which sits badly with the honesty gate. Action: define and enforce a
   match-confidence floor for benchmark lookup (e.g. reject matches whose fuzzy score
   or clean-name quality is too low, degrade to unverified), and re-check behavior on
-  a native Linux box where real device names exist. (source: WSL smoke run,
-  app 2679460, 2026-11-08)
+  a native Linux box where real device names exist. **RESOLVED by 0.2.1** (HON-001:
+  lookup-entry placeholder floor; regression verified against real `Device 008e`
+  output on the WSL box in the REL21-003 run log — see
+  `.spec/units/0.2.1/bench-honesty/`). (source: WSL smoke run, app 2679460,
+  2026-11-08; resolution 2026-11-08)
+
+## Post-0.2.1 backlog — AMD/Mesa chain completeness (added 2026-11-08)
+
+- **AMD/Mesa GPU/VRAM fallback rungs deferred:** the Linux chain's fallback rungs
+  are NVIDIA-shaped (`nvidia-smi`), built from WSL/NVIDIA fixtures; AMD works via
+  the `lspci` primary + `vulkaninfo` VRAM, and a pci.ids-less native Linux fails
+  loudly (honest crash, not a fake spec). Deferred until a real native-Linux AMD
+  failure report exists; candidate rungs (eglinfo/glxinfo, /sys/class/drm) are
+  design detail for a future unit spec. (source: user decision 2026-11-08,
+  "way later is acceptable")
