@@ -1,6 +1,7 @@
 # Tasks — 0.2.1/bench-honesty
 
-- [ ] HON-001: Placeholder-name detection + lookup-entry honesty gate
+- [x] HON-001: Placeholder-name detection + lookup-entry honesty gate
+  status: done (commit 2abb3aa)
   depends: -
   files: src/keniran/adapters/benchmarks.py, tests/test_benchmarks.py
   pattern: has_model_number() model-less → matched_by="unverified" path in lookup()

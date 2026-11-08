@@ -1,8 +1,11 @@
 # Active context — 0.2.1/bench-honesty
 
-- current task: next up — HON-001 (placeholder denylist + lookup gate). Nothing
-  blocked (fresh unit, no prerequisites). Parallel-safe with 0.2.1/linux-storage:
-  disjoint files (benchmarks.py + test_benchmarks.py vs linux.py + test_hardware_linux.py).
-- state: unit created 2026-11-08 from the decisions.md WSL-smoke backlog entry
-  (app 2679460); design locked in the unit spec (lookup-entry floor, placeholder
-  denylist, best_guess stays scorable).
+- current task: unit complete — HON-001 done.
+- last commit: 2abb3aa HON-001 (reviewer-approved; suite 235 green, ruff/mypy clean).
+- state: bench-honesty unit DONE. Notes: (1) tests/test_benchmarks.py is a NEW
+  module (the spec filenames pre-existing suite is test_benchmark_lookup.py —
+  untouched, green). (2) Recorded rule: bare single-token names are placeholder
+  only with hex letter [a-f] or 0x prefix — pure decimals ("3080") stay real;
+  known trade: hex-letter shorthand like "a100" now degrades to unverified
+  (extending the denylist constant later is a one-liner). (3) WSL-smoke re-check
+  of real `Device 008e` output happens in REL21-003.
