@@ -2,7 +2,7 @@
 
 Implements section 4 of ``plan/decisions.md``: run ``dxdiag /t`` once, parse the
 CPU, RAM, GPU, and dedicated VRAM facts from the report text, record free space
-on the system drive via :mod:`psutil`, and persist the validated
+on the best local fixed mount via :mod:`psutil`, and persist the validated
 :class:`~keniran.core.models.SystemSpec` to ``generated/system_spec.json``.
 Later runs reuse that cache unless ``refresh=True`` (the CLI's
 ``--refresh-spec``).
@@ -29,10 +29,13 @@ from typing import Final
 import psutil  # type: ignore[import-untyped]
 from pydantic import ValidationError
 
+from keniran.adapters.hardware.storage import Partition, select_storage_free
 from keniran.core.models import SystemSpec
 
 GENERATED_DIR: Final = Path("generated")
 DEFAULT_SPEC_PATH: Final = GENERATED_DIR / "system_spec.json"
+
+_BYTES_PER_GB: Final = 1024.0**3
 
 DXDIAG_EXECUTABLE: Final = "dxdiag"
 DXDIAG_TIMEOUT_SECONDS: Final = 120.0
@@ -132,10 +135,10 @@ def parse_dxdiag(text: str) -> DxDiagInfo:
 def audit(*, path: Path = DEFAULT_SPEC_PATH) -> SystemSpec:
     """Run a fresh dxdiag audit, persist the result, and return it.
 
-    The report is written to a temporary file, parsed, combined with the
-    system drive's free space, and atomically saved to *path*. Raises
-    :class:`UnsupportedPlatformError` on non-Windows platforms and
-    :class:`DxDiagError` when dxdiag cannot be executed.
+        The report is written to a temporary file, parsed, combined with the best
+    local fixed mount's free space, and atomically saved to *path*. Raises
+        :class:`UnsupportedPlatformError` on non-Windows platforms and
+        :class:`DxDiagError` when dxdiag cannot be executed.
     """
     if sys.platform != "win32":
         msg = f"hardware audit requires Windows: dxdiag is not available on {sys.platform}"
@@ -147,13 +150,15 @@ def audit(*, path: Path = DEFAULT_SPEC_PATH) -> SystemSpec:
         report_text = _read_report(report_path)
 
     info = parse_dxdiag(report_text)
+    storage = select_storage_free(None, _collect_partitions())
     spec = SystemSpec(
         platform=sys.platform,
         cpu_name=info.cpu_name,
         ram_gb=info.ram_gb,
         gpu_name=info.gpu_name,
         vram_gb=info.vram_gb,
-        disk_free_gb=_disk_free_gb(),
+        disk_free_gb=storage.free_gb,
+        storage_used_mount=storage.mount,
         audited_at=datetime.now(UTC),
     )
     save(spec, path=path)
@@ -356,10 +361,28 @@ def _to_gb(value: float, unit: str) -> float:
     return round(value, 2)
 
 
-def _disk_free_gb() -> float:
-    """Return free space in GB on the Windows system drive."""
-    system_drive = os.environ.get("SYSTEMDRIVE") or "C:"
-    root = system_drive.rstrip("\\/") + os.sep
-    usage = psutil.disk_usage(root)
-    free_bytes = float(usage.free)
-    return round(free_bytes / (1024.0**3), 2)
+def _collect_partitions() -> list[Partition]:
+    """Measure every local psutil partition into an injected :class:`Partition` list.
+
+    Each entry of ``psutil.disk_partitions(all=False)`` gets a
+    ``disk_usage`` measurement; a mount that cannot be measured (unmounted
+    mid-audit, permission error) keeps ``free_gb=None`` so the shared helper
+    can still see the mount but never picks it as "best".
+    """
+    partitions: list[Partition] = []
+    for part in psutil.disk_partitions(all=False):
+        try:
+            free_bytes = float(psutil.disk_usage(part.mountpoint).free)
+        except (OSError, ValueError, AttributeError):
+            free_gb = None
+        else:
+            free_gb = round(free_bytes / _BYTES_PER_GB, 2)
+        partitions.append(
+            Partition(
+                mountpoint=part.mountpoint,
+                fstype=part.fstype or "",
+                opts=tuple(flag for flag in part.opts.split(",") if flag),
+                free_gb=free_gb,
+            )
+        )
+    return partitions

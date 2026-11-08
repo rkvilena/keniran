@@ -7,6 +7,7 @@ Windows-independent and never touches the real ``C:`` drive or ``generated/``.
 
 from __future__ import annotations
 
+import ast
 import inspect
 import json
 import subprocess
@@ -18,7 +19,9 @@ import pytest
 from pydantic import ValidationError
 
 from keniran.adapters import hardware
-from keniran.adapters.hardware import windows
+from keniran.adapters.hardware import storage, windows
+from keniran.adapters.hardware.storage import Partition, select_storage_free
+from keniran.core import scoring
 from keniran.core.models import SystemSpec
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -74,8 +77,23 @@ def _install_fake_dxdiag(monkeypatch: pytest.MonkeyPatch, report_text: str) -> l
 
 
 def _install_fake_disk(monkeypatch: pytest.MonkeyPatch, free_gb: float) -> None:
-    """Replace the psutil disk lookup with a fixed free-space value."""
-    monkeypatch.setattr(windows, "_disk_free_gb", lambda: free_gb)
+    """Replace the psutil partition lookup with one fixed local mount."""
+    _install_fake_partitions(
+        monkeypatch,
+        [
+            Partition(
+                mountpoint="C:\\",
+                fstype="NTFS",
+                opts=("rw", "fixed"),
+                free_gb=free_gb,
+            )
+        ],
+    )
+
+
+def _install_fake_partitions(monkeypatch: pytest.MonkeyPatch, partitions: list[Partition]) -> None:
+    """Replace the psutil partition collection with an injected list."""
+    monkeypatch.setattr(windows, "_collect_partitions", lambda: partitions)
 
 
 def _completed(returncode: int) -> subprocess.CompletedProcess[str]:
@@ -155,6 +173,7 @@ def test_audit_writes_complete_validated_spec(
     assert spec.gpu_name == "NVIDIA GeForce RTX 3060"
     assert spec.vram_gb == 12.0
     assert spec.disk_free_gb == 148.25
+    assert spec.storage_used_mount == "C:\\"
     assert spec.audited_at.tzinfo is not None
 
     assert path.is_file()
@@ -166,9 +185,11 @@ def test_audit_writes_complete_validated_spec(
         "gpu_name",
         "vram_gb",
         "disk_free_gb",
+        "storage_used_mount",
         "audited_at",
     }
     assert payload["platform"] == "win32"
+    assert payload["storage_used_mount"] == "C:\\"
     assert datetime.fromisoformat(payload["audited_at"]).tzinfo is not None
     assert SystemSpec.model_validate(payload) == spec
 
@@ -227,6 +248,7 @@ def test_save_and_load_round_trip_all_fields(tmp_path: Path) -> None:
         gpu_name="NVIDIA GeForce GTX 1060",
         vram_gb=6.0,
         disk_free_gb=148.2,
+        storage_used_mount="C:\\",
         audited_at=datetime(2026, 11, 7, 12, 30, 45, 123456, tzinfo=UTC),
     )
     path = tmp_path / "generated" / "system_spec.json"
@@ -242,6 +264,7 @@ def test_save_and_load_round_trip_all_fields(tmp_path: Path) -> None:
     assert payload["gpu_name"] is not None
     assert payload["vram_gb"] is not None
     assert payload["disk_free_gb"] is not None
+    assert payload["storage_used_mount"] == "C:\\"
     assert hardware.load(path=path) == spec
 
 
@@ -509,3 +532,148 @@ def test_load_without_cache_on_non_windows_raises(
 
     with pytest.raises(hardware.UnsupportedPlatformError):
         hardware.load(path=tmp_path / "generated" / "system_spec.json")
+
+
+def _part(
+    mountpoint: str,
+    *,
+    fstype: str = "NTFS",
+    opts: tuple[str, ...] = ("rw", "fixed"),
+    free: float | None = 100.0,
+) -> Partition:
+    return Partition(mountpoint=mountpoint, fstype=fstype, opts=opts, free_gb=free)
+
+
+def test_audit_picks_largest_free_mount_across_multiple_local_drives(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _install_fake_windows(monkeypatch)
+    _install_fake_dxdiag(monkeypatch, SAMPLE_TEXT)
+    _install_fake_partitions(
+        monkeypatch,
+        [
+            _part("C:\\", free=50.0),
+            _part("D:\\", free=200.5),
+            _part("E:\\", free=120.0),
+        ],
+    )
+    path = tmp_path / "generated" / "system_spec.json"
+
+    spec = hardware.audit(path=path)
+
+    assert spec.disk_free_gb == 200.5
+    assert spec.storage_used_mount == "D:\\"
+
+
+def test_audit_skips_non_local_kinds_and_records_best_local_mount(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _install_fake_windows(monkeypatch)
+    _install_fake_dxdiag(monkeypatch, SAMPLE_TEXT)
+    _install_fake_partitions(
+        monkeypatch,
+        [
+            _part(r"\\NAS\share", fstype="NFS", opts=("rw", "network"), free=5000.0),
+            _part("E:\\", fstype="CDIRECT", opts=("ro", "cdrom"), free=1.0),
+            _part("C:\\", free=80.0),
+        ],
+    )
+    path = tmp_path / "generated" / "system_spec.json"
+
+    spec = hardware.audit(path=path)
+
+    assert spec.disk_free_gb == 80.0
+    assert spec.storage_used_mount == "C:\\"
+
+
+def test_audit_without_any_measurable_mount_records_unverified(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _install_fake_windows(monkeypatch)
+    _install_fake_dxdiag(monkeypatch, SAMPLE_TEXT)
+    _install_fake_partitions(monkeypatch, [])
+    path = tmp_path / "generated" / "system_spec.json"
+
+    spec = hardware.audit(path=path)
+
+    assert spec.disk_free_gb is None
+    assert spec.storage_used_mount is None
+
+
+def test_select_storage_free_passes_when_best_mount_meets_requirement() -> None:
+    result = select_storage_free(
+        30.0,
+        [_part("C:\\", free=20.0), _part("D:\\", free=50.0)],
+    )
+
+    assert result.free_gb == 50.0
+    assert result.mount == "D:\\"
+    assert result.skipped_kinds == frozenset()
+    assert scoring.meets_minimum(result.free_gb, 30.0) is True
+
+
+def test_select_storage_free_fail_records_best_mount_anyway() -> None:
+    result = select_storage_free(30.0, [_part("C:\\", free=10.0)])
+
+    assert result.free_gb == 10.0
+    assert result.mount == "C:\\"
+    assert scoring.meets_minimum(result.free_gb, 30.0) is False
+
+
+def test_select_storage_free_skips_removable_network_and_cdrom() -> None:
+    result = select_storage_free(
+        30.0,
+        [
+            _part("F:\\", opts=("rw", "removable"), free=400.0),
+            _part(r"\\NAS\games", fstype="cifs", opts=("rw",), free=500.0),
+            _part("G:\\", opts=("ro", "cdrom"), free=7.0),
+            _part("C:\\", free=30.0),
+        ],
+    )
+
+    assert result.free_gb == 30.0
+    assert result.mount == "C:\\"
+    # The excluded kinds stay visible instead of being silently dropped.
+    assert result.skipped_kinds == frozenset({"removable", "network", "cdrom"})
+
+
+def test_select_storage_free_network_fstype_caught_without_opt_flag() -> None:
+    result = select_storage_free(30.0, [_part("/mnt/nas", fstype="nfs4", opts=("rw",), free=900.0)])
+
+    assert result.free_gb is None
+    assert result.mount is None
+    assert result.skipped_kinds == frozenset({"network"})
+
+
+def test_select_storage_free_empty_partition_list_is_honest_unverified() -> None:
+    result = select_storage_free(30.0, [])
+
+    assert result.free_gb is None
+    assert result.mount is None
+    assert result.skipped_kinds == frozenset()
+
+
+def test_select_storage_free_eligible_mount_without_measurement_not_picked() -> None:
+    # An eligible mount the caller could not measure must never be "best".
+    result = select_storage_free(
+        30.0,
+        [_part("C:\\", free=None), _part("D:\\", free=25.0)],
+    )
+
+    assert result.free_gb == 25.0
+    assert result.mount == "D:\\"
+
+
+def test_storage_module_imports_no_platform_specific_libraries() -> None:
+    storage_path = Path(storage.__file__).resolve()
+    tree = ast.parse(storage_path.read_text(encoding="utf-8"))
+
+    roots: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            roots.update(alias.name.split(".")[0] for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module is not None:
+            roots.add(node.module.split(".")[0])
+
+    forbidden = {"win32", "win32api", "winreg", "ctypes", "psutil", "os", "subprocess"}
+    assert forbidden.isdisjoint(roots), roots

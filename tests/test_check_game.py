@@ -24,6 +24,7 @@ from keniran.adapters.steam import SteamRequirements
 from keniran.core import scoring
 from keniran.core.models import (
     ComponentName,
+    ComponentRow,
     GameRequirements,
     Report,
     SystemSpec,
@@ -208,6 +209,68 @@ def test_system_spec_accepts_unknown_vram() -> None:
 
     assert spec.vram_gb is None
     assert SystemSpec.model_validate(spec.model_dump(mode="json")) == spec
+
+
+def test_storage_row_renders_free_space_with_measured_mount(benchmark_db: dict[str, Any]) -> None:
+    spec = _system_spec(disk_free_gb=100.0).model_copy(update={"storage_used_mount": "C:\\"})
+
+    report = _check(benchmark_db, spec=spec)
+
+    storage_row = next(row for row in report.components if row.component is ComponentName.STORAGE)
+    assert storage_row.user_value == "100 GB (C:\\)"
+    assert storage_row.passed is True
+    assert storage_row.unverified is False
+
+
+def test_storage_row_without_mount_renders_plain_gigabytes(
+    benchmark_db: dict[str, Any],
+) -> None:
+    # Legacy cache / older audit: no mount recorded, value stays verbatim "X GB".
+    report = _check(benchmark_db, spec=_system_spec(disk_free_gb=100.0))
+
+    storage_row = next(row for row in report.components if row.component is ComponentName.STORAGE)
+    assert storage_row.user_value == "100 GB"
+
+
+def test_storage_row_unverified_when_no_eligible_local_mount(
+    benchmark_db: dict[str, Any],
+) -> None:
+    spec = _system_spec(disk_free_gb=None).model_copy(update={"storage_used_mount": None})
+    html = _requirements_html(storage="30 GB")
+
+    report = _check(benchmark_db, html=html, spec=spec)
+
+    storage_row = next(row for row in report.components if row.component is ComponentName.STORAGE)
+    assert storage_row.user_value == "unverified"
+    assert storage_row.required_value == "30 GB"
+    assert storage_row.passed is None
+    assert storage_row.unverified is True
+
+    assert report.verdict is not None
+    # The honest unverified state is not a shortfall: the verdict stays PASS.
+    assert report.verdict.band is VerdictBand.PASS
+    assert ComponentName.STORAGE not in report.verdict.shortfall_components
+
+
+def test_storage_row_carries_skipped_kinds_note_surface_for_renderer() -> None:
+    # The renderer never invents notes: the pipeline/model surface exists so a
+    # caller can attach the skipped non-local mount kinds (e.g. a network
+    # share the storage check deliberately excluded) to the storage row.
+    note = "skipped kinds: network"
+    row = ComponentRow(
+        component=ComponentName.STORAGE,
+        user_value="unverified",
+        required_value="30 GB",
+        passed=None,
+        unverified=True,
+        note=note,
+    )
+    report = Report(game_name="Sample Game", app_id=APP_ID, components=[row])
+
+    round_tripped = Report.model_validate(report.model_dump(mode="json"))
+
+    assert round_tripped.components[0].note == note
+    assert round_tripped.components[0].component is ComponentName.STORAGE
 
 
 def test_unknown_user_vram_is_unverified_and_not_a_shortfall(

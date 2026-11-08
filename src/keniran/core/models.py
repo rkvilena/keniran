@@ -37,6 +37,12 @@ class SystemSpec(BaseModel):
 
     ``vram_gb`` is optional: ``None`` means the audit could not establish the
     dedicated VRAM, so reports mark the VRAM row unverified instead of guessing.
+
+    ``disk_free_gb`` is likewise optional: ``None`` means no eligible local
+    fixed mount could be measured (or none exists), so the storage row is
+    unverified instead of claiming zero bytes. ``storage_used_mount`` names the
+    mount the reported free space was measured on (``None`` alongside a
+    ``None`` free space, or on legacy caches from before the field existed).
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -46,7 +52,8 @@ class SystemSpec(BaseModel):
     ram_gb: float = Field(ge=0)
     gpu_name: str
     vram_gb: float | None = Field(default=None, ge=0)
-    disk_free_gb: float = Field(ge=0)
+    disk_free_gb: float | None = Field(default=None, ge=0)
+    storage_used_mount: str | None = None
     audited_at: datetime
 
 
@@ -108,7 +115,9 @@ class ComponentRow(BaseModel):
 
     CPU/GPU rows carry a performance ``ratio``; hard-checked RAM/VRAM/Storage
     rows carry a boolean ``passed`` result. Either may be ``None`` when the
-    component is unverifiable.
+    component is unverifiable. ``note`` is an optional informational surface
+    (for example the skipped non-local mount kinds on the storage row) that
+    renderers may show but never need for scoring.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -121,6 +130,7 @@ class ComponentRow(BaseModel):
     confidence: float | None = None
     matched_name: str | None = None
     unverified: bool = False
+    note: str | None = None
 
 
 class Verdict(BaseModel):

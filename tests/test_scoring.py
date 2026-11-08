@@ -42,6 +42,7 @@ def test_system_spec_exposes_section_4_3_fields() -> None:
         "gpu_name",
         "vram_gb",
         "disk_free_gb",
+        "storage_used_mount",
         "audited_at",
     }
 

@@ -121,6 +121,7 @@ def check_game(
         ComponentName.STORAGE,
         system_spec.disk_free_gb,
         requirements.storage_gb,
+        mount=system_spec.storage_used_mount,
     )
 
     shortfalls = scoring.minimum_shortfalls(system_spec, requirements)
@@ -223,12 +224,25 @@ def _hard_check_row(
     component: ComponentName,
     user_value: float | None,
     required_value: float | None,
+    *,
+    mount: str | None = None,
 ) -> ComponentRow:
-    """Build one storage row from the direct numeric minimum check."""
+    """Build one storage row from the direct numeric minimum check.
+
+    ``mount`` (when known) is appended to the rendered user value as
+    ``"<free> GB (<mount>)"`` so the report shows *where* the free space was
+    measured; the pass semantics stay a pure boolean minimum check.
+    """
     passed = scoring.meets_minimum(user_value, required_value)
+    if user_value is not None:
+        rendered_user = _format_gigabytes(user_value)
+        if mount is not None:
+            rendered_user = f"{rendered_user} ({mount})"
+    else:
+        rendered_user = UNVERIFIED_VALUE
     return ComponentRow(
         component=component,
-        user_value=(_format_gigabytes(user_value) if user_value is not None else UNVERIFIED_VALUE),
+        user_value=rendered_user,
         required_value=(
             _format_gigabytes(required_value) if required_value is not None else NOT_PUBLISHED_VALUE
         ),
