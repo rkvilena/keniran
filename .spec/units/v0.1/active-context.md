@@ -1,3 +1,5 @@
+**Migration note (2026-11-08):** Legacy flat `.spec/` wrapped into the unit-scoped layout. `tasks.md` and `active-context.md` moved verbatim to `.spec/units/v0.1/` via `git mv`; `spec.md` and `decisions.md` remain global; `.spec/conventions.md` created. Task IDs unchanged (T-001–T-009). See `.spec/units/v0.1/spec.md` for the record.
+
 # Run Summary — 2026-11-07 (resume run; ALL 9 TASKS COMPLETE)
 
 - **Tasks done: 9/9, zero blocked.** Every task: implementer → reviewer APPROVED → orchestrator re-ran acceptance → one commit.
