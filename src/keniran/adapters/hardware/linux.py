@@ -23,18 +23,20 @@ under-report the physical machine. Treat a WSL-audited spec as a WSL spec.
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 import subprocess
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Iterable, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Final, cast
+from typing import Final, Protocol, cast
 
 import psutil  # type: ignore[import-untyped]
 
 from keniran.adapters.hardware import windows
+from keniran.adapters.hardware.storage import Partition
 from keniran.adapters.hardware.windows import (
     DEFAULT_SPEC_PATH,
     HardwareAuditError,
@@ -415,6 +417,156 @@ def _gather_vram_gb() -> float | None:
     if vulkan_text is not None:
         return parse_vulkaninfo(vulkan_text)
     return None
+
+
+# --- Storage gatherer (LSTO-001) ---------------------------------------------
+
+# Linux pseudo filesystems that must never reach the shared storage helper
+# (``plan/decisions.md`` §4). ``tmpfs`` is sized like RAM and its inflated free
+# space would fake a storage PASS; ``squashfs`` is read-only snap content; the
+# rest carry no usable storage. ``fuseblk``/``ntfs`` data partitions are
+# deliberately absent: low-end dual-boot boxes keep games on them.
+_PSEUDO_FSTYPES: Final[frozenset[str]] = frozenset(
+    {"tmpfs", "ramfs", "devtmpfs", "proc", "sysfs", "efivarfs", "squashfs", "overlay"}
+)
+
+
+class _RawLinuxPartition(Protocol):
+    """Duck-typed ``psutil.disk_partitions`` entry consumed by the pure filter."""
+
+    device: str
+    mountpoint: str
+    fstype: str
+    opts: str
+
+
+def filter_linux_partitions(
+    raw_parts: Iterable[_RawLinuxPartition],
+    free_gb_lookup: Callable[[str], float | None],
+) -> tuple[list[Partition], frozenset[str]]:
+    """Turn raw ``psutil`` partitions into Linux storage-helper candidates.
+
+    Pure function with no I/O: every surviving mountpoint is measured through
+    the injected *free_gb_lookup* (tests pass a dict lookup; the real caller
+    injects :func:`psutil.disk_usage`). Linux-specific hygiene the Windows path
+    never needed (``plan/decisions.md`` §4, unit 0.2.1/linux-storage):
+
+    - Pseudo filesystems (:data:`_PSEUDO_FSTYPES`) are excluded before
+      measuring and reported as the ``"pseudo"`` skipped kind, so ``tmpfs``
+      free space and read-only ``squashfs`` snap packages can never be
+      selected as "best".
+    - Ext4 merged-usr and bind setups present one block device under several
+      mountpoints; same-``device`` entries are collapsed to the mountpoint
+      with the most free space (an unmeasurable mount ranks last, and the
+      first entry wins a tie), so one filesystem cannot be counted twice.
+    - WSL ``9p``/``drvfs`` mounts are not pseudo filesystems and deliberately
+      stay in the result; the shared
+      :func:`~keniran.adapters.hardware.storage.select_storage_free` helper
+      classifies ``9p`` as a network skip.
+
+    The honesty gate (``plan/decisions.md`` §2) applies: malformed entries and
+    failed measurements degrade per field instead of raising — missing string
+    fields become ``""``, a lookup that raises or returns a non-finite value
+    yields ``free_gb=None``, and an entry without a usable mountpoint is
+    dropped. Entries keep their first-appearance order.
+    """
+    best_by_key: dict[str, Partition] = {}
+    skipped_kinds: set[str] = set()
+
+    for raw in raw_parts:
+        mountpoint = _raw_text(raw, "mountpoint")
+        if not mountpoint:
+            continue
+
+        fstype = _raw_text(raw, "fstype")
+        if fstype.casefold() in _PSEUDO_FSTYPES:
+            skipped_kinds.add("pseudo")
+            continue
+
+        partition = Partition(
+            mountpoint=mountpoint,
+            fstype=fstype,
+            opts=_split_opts(_raw_text(raw, "opts")),
+            free_gb=_lookup_free_gb(free_gb_lookup, mountpoint),
+        )
+        # An unreadable device must not collapse unrelated mounts, so fall
+        # back to the mountpoint itself as the dedupe key.
+        key = _raw_text(raw, "device") or mountpoint
+        incumbent = best_by_key.get(key)
+        if incumbent is None or _free_rank(partition.free_gb) > _free_rank(incumbent.free_gb):
+            best_by_key[key] = partition
+
+    return list(best_by_key.values()), frozenset(skipped_kinds)
+
+
+def _collect_partitions() -> list[Partition]:
+    """Measure local ``psutil`` partitions and apply the Linux mount hygiene.
+
+    Mirrors :func:`keniran.adapters.hardware.windows._collect_partitions`:
+    ``psutil.disk_partitions(all=False)`` feeds the pure
+    :func:`filter_linux_partitions`, which drops pseudo filesystems and
+    collapses same-device mounts; free space is measured lazily per surviving
+    mountpoint through ``psutil.disk_usage``. A mount that cannot be measured
+    stays in the list with ``free_gb=None`` so the shared helper can still see
+    it but never picks it as "best".
+    """
+    measured: dict[str, float | None] = {}
+
+    def free_gb_lookup(mountpoint: str) -> float | None:
+        if mountpoint not in measured:
+            measured[mountpoint] = _measure_free_gb(mountpoint)
+        return measured[mountpoint]
+
+    partitions, _skipped = filter_linux_partitions(
+        psutil.disk_partitions(all=False), free_gb_lookup
+    )
+    return partitions
+
+
+def _measure_free_gb(mountpoint: str) -> float | None:
+    """Return free space in GB on *mountpoint*, or ``None`` when unmeasurable."""
+    try:
+        free_bytes = float(psutil.disk_usage(mountpoint).free)
+    except (OSError, ValueError, AttributeError):
+        return None
+    return round(free_bytes / _BYTES_PER_GB, 2)
+
+
+def _raw_text(raw: object, field: str) -> str:
+    """Return a raw partition string field, or ``""`` when it is malformed."""
+    value = getattr(raw, field, "")
+    return value if isinstance(value, str) else ""
+
+
+def _split_opts(raw_opts: str) -> tuple[str, ...]:
+    """Split psutil's comma-joined ``opts`` string into a flag tuple."""
+    return tuple(flag for flag in raw_opts.split(",") if flag)
+
+
+def _lookup_free_gb(
+    free_gb_lookup: Callable[[str], float | None],
+    mountpoint: str,
+) -> float | None:
+    """Measure *mountpoint* through the injected lookup, degrading to ``None``.
+
+    An exception (unmounted mid-audit, permission error, a lookup with no
+    entry) or a non-numeric/non-finite return is "cannot measure" — the
+    honesty gate must never propagate either.
+    """
+    try:
+        value = free_gb_lookup(mountpoint)
+    except Exception:  # the honesty gate must never propagate lookup failures
+        return None
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    if not math.isfinite(value):
+        return None
+    return float(value)
+
+
+def _free_rank(free_gb: float | None) -> float:
+    """Rank measured free space for dedupe; unmeasurable mounts rank last."""
+    return free_gb if free_gb is not None else float("-inf")
 
 
 def audit(*, path: Path = DEFAULT_SPEC_PATH) -> SystemSpec:

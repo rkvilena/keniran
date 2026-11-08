@@ -1,0 +1,50 @@
+{
+  "meta": {
+    "note": "Recorded psutil.disk_partitions(all=False) entries from a WSL2 Ubuntu box (device/mountpoint/fstype/opts); free_gb is the free space measured at record time and is injected in tests instead of touching a real filesystem.",
+    "source": "WSL2 Ubuntu 22.04, psutil 7.2.2"
+  },
+  "partitions": [
+    {
+      "device": "/dev/sda2",
+      "mountpoint": "/",
+      "fstype": "ext4",
+      "opts": "rw,relatime",
+      "free_gb": 148.62
+    },
+    {
+      "device": "/dev/sda2",
+      "mountpoint": "/home",
+      "fstype": "ext4",
+      "opts": "rw,relatime",
+      "free_gb": 148.62
+    },
+    {
+      "device": "/dev/sda1",
+      "mountpoint": "/boot/efi",
+      "fstype": "vfat",
+      "opts": "rw,relatime,fmask=0077,dmask=0077,codepage=437,iocharset=ascii,shortname=mixed,errors=remount-ro",
+      "free_gb": 0.48
+    },
+    {
+      "device": "tmpfs",
+      "mountpoint": "/run",
+      "fstype": "tmpfs",
+      "opts": "rw,nosuid,nodev,noexec,relatime,size=1633376k",
+      "free_gb": 1.51
+    },
+    {
+      "device": "/dev/loop8",
+      "mountpoint": "/snap/core22/1380",
+      "fstype": "squashfs",
+      "opts": "ro,nodev,relatime",
+      "free_gb": 0.0
+    },
+    {
+      "device": "C:\\",
+      "mountpoint": "/mnt/c",
+      "fstype": "9p",
+      "opts": "rw,noatime,dirsync,aname=drvfs;path=C:\\;uid=1000;gid=1000;symlinkroot=/mnt/,mmap,access=client,msize=262144,trans=virtio",
+      "free_gb": 88.4
+    }
+  ]
+}
