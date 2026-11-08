@@ -10,6 +10,7 @@ from __future__ import annotations
 import ast
 import inspect
 import json
+import os
 import subprocess
 import sys
 from datetime import UTC, datetime
@@ -62,6 +63,18 @@ Display Devices
 def _install_fake_windows(monkeypatch: pytest.MonkeyPatch) -> None:
     """Pin the platform check to Windows so these tests are host-independent."""
     monkeypatch.setattr(hardware.sys, "platform", "win32")
+
+
+def _install_unsupported_platform(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Simulate a host that supports neither the Windows nor the Linux audit.
+
+    ``sys.platform`` drives the facade's backend dispatch and ``os.name``
+    arms the Linux backend's POSIX guard, so both must be faked for the
+    "unsupported platform" simulation to behave identically on a Windows
+    host (``os.name == "nt"``) and inside WSL (``os.name == "posix"``).
+    """
+    monkeypatch.setattr(hardware.sys, "platform", "linux")
+    monkeypatch.setattr(os, "name", "java")
 
 
 def _install_fake_dxdiag(monkeypatch: pytest.MonkeyPatch, report_text: str) -> list[Path]:
@@ -308,7 +321,7 @@ def test_load_other_platform_cache_on_non_windows_reaudits(
 ) -> None:
     path = tmp_path / "generated" / "system_spec.json"
     hardware.save(OLD_SPEC, path=path)  # audited on win32
-    monkeypatch.setattr(hardware.sys, "platform", "linux")
+    _install_unsupported_platform(monkeypatch)
 
     def explode(report_path: Path) -> None:
         raise AssertionError("dxdiag must not run on non-Windows platforms")
@@ -387,7 +400,7 @@ def test_load_corrupt_cache_raises_named_cache_error(tmp_path: Path) -> None:
 def test_audit_on_non_windows_raises_clear_error(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    monkeypatch.setattr(hardware.sys, "platform", "linux")
+    _install_unsupported_platform(monkeypatch)
 
     def explode(report_path: Path) -> None:
         raise AssertionError("dxdiag must not run on non-Windows platforms")
@@ -497,7 +510,7 @@ def test_facade_audit_does_not_dispatch_on_unsupported_platform(
     def explode(*, path: Path) -> SystemSpec:
         raise AssertionError("the Windows backend must not run on non-Windows")
 
-    monkeypatch.setattr(hardware.sys, "platform", "linux")
+    _install_unsupported_platform(monkeypatch)
     monkeypatch.setattr(windows, "audit", explode)
 
     with pytest.raises(hardware.UnsupportedPlatformError):
@@ -528,7 +541,7 @@ def test_save_and_parse_stay_platform_independent(
 def test_load_without_cache_on_non_windows_raises(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    monkeypatch.setattr(hardware.sys, "platform", "linux")
+    _install_unsupported_platform(monkeypatch)
 
     with pytest.raises(hardware.UnsupportedPlatformError):
         hardware.load(path=tmp_path / "generated" / "system_spec.json")
