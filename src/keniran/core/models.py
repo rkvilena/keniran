@@ -30,10 +30,15 @@ class VerdictBand(StrEnum):
 
 
 class SystemSpec(BaseModel):
-    """Audited local machine, persisted to ``generated/system_spec.json`` (§4.3)."""
+    """Audited local machine, persisted to ``generated/system_spec.json`` (§4.3).
+
+    ``platform`` records the ``sys.platform`` of the audited machine so a cache
+    written on another OS (e.g. Windows vs. WSL) is re-audited instead of reused.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
+    platform: str
     cpu_name: str
     ram_gb: float = Field(ge=0)
     gpu_name: str

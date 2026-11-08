@@ -24,6 +24,7 @@ from keniran.core.models import (
 
 def _spec() -> SystemSpec:
     return SystemSpec(
+        platform="win32",
         cpu_name="Intel Core i5-10400",
         ram_gb=8.0,
         gpu_name="NVIDIA GeForce GTX 1060 6GB",
@@ -35,6 +36,7 @@ def _spec() -> SystemSpec:
 
 def test_system_spec_exposes_section_4_3_fields() -> None:
     assert set(SystemSpec.model_fields) == {
+        "platform",
         "cpu_name",
         "ram_gb",
         "gpu_name",

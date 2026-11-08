@@ -2,9 +2,10 @@
 
 The Windows implementation lives in :mod:`keniran.adapters.hardware.windows`.
 This facade re-exports its public API and selects the backend when platform
-specific work is requested, so the package imports cleanly everywhere and
-cached specs stay readable on unsupported platforms (behavior is unchanged
-from the former single-module adapter).
+specific work is requested, so the package imports cleanly everywhere. Backends
+stamp :class:`~keniran.core.models.SystemSpec` with ``sys.platform``; a cache
+written on another platform (or a legacy cache without the key) is re-audited
+rather than reused.
 """
 
 from __future__ import annotations
@@ -59,15 +60,19 @@ def _require_windows_backend() -> None:
 def audit(*, path: Path = DEFAULT_SPEC_PATH) -> SystemSpec:
     """Run a fresh dxdiag audit, persist the result, and return it.
 
-    Dispatches to the Windows backend; other platforms raise
-    :class:`UnsupportedPlatformError`.
+    Dispatches to the Windows backend, which stamps the spec with
+    ``sys.platform``; other platforms raise :class:`UnsupportedPlatformError`.
     """
     _require_windows_backend()
     return windows.audit(path=path)
 
 
 def load(*, refresh: bool = False, path: Path = DEFAULT_SPEC_PATH) -> SystemSpec:
-    """Return the cached audit, running a fresh one only when needed."""
+    """Return the cached audit, running a fresh one only when needed.
+
+    The cache is reused only when its ``platform`` matches the current
+    ``sys.platform``; a mismatch or legacy cache without the key re-audits.
+    """
     return windows.load(refresh=refresh, path=path)
 
 

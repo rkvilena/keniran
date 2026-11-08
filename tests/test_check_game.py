@@ -60,6 +60,7 @@ def _system_spec(
     disk_free_gb: float = 100.0,
 ) -> SystemSpec:
     return SystemSpec(
+        platform="win32",
         cpu_name=cpu,
         ram_gb=ram_gb,
         gpu_name=gpu,

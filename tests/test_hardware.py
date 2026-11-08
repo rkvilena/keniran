@@ -10,10 +10,12 @@ from __future__ import annotations
 import inspect
 import json
 import subprocess
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from keniran.adapters import hardware
 from keniran.adapters.hardware import windows
@@ -24,6 +26,7 @@ DXDIAG_FIXTURE = FIXTURES / "dxdiag_sample.txt"
 SAMPLE_TEXT = DXDIAG_FIXTURE.read_text(encoding="utf-8")
 
 OLD_SPEC = SystemSpec(
+    platform="win32",
     cpu_name="Old CPU",
     ram_gb=8.0,
     gpu_name="Old GPU",
@@ -146,6 +149,7 @@ def test_audit_writes_complete_validated_spec(
 
     spec = hardware.audit(path=path)
 
+    assert spec.platform == "win32"
     assert spec.cpu_name == "Intel(R) Core(TM) i7-9700K CPU"
     assert spec.ram_gb == 16.0
     assert spec.gpu_name == "NVIDIA GeForce RTX 3060"
@@ -156,6 +160,7 @@ def test_audit_writes_complete_validated_spec(
     assert path.is_file()
     payload = json.loads(path.read_text(encoding="utf-8"))
     assert set(payload) == {
+        "platform",
         "cpu_name",
         "ram_gb",
         "gpu_name",
@@ -163,6 +168,7 @@ def test_audit_writes_complete_validated_spec(
         "disk_free_gb",
         "audited_at",
     }
+    assert payload["platform"] == "win32"
     assert datetime.fromisoformat(payload["audited_at"]).tzinfo is not None
     assert SystemSpec.model_validate(payload) == spec
 
@@ -181,6 +187,7 @@ def test_load_reads_existing_cache_without_reauditing(
 
     monkeypatch.setattr(windows, "_run_dxdiag", explode)
 
+    assert audited.platform == "win32"
     assert hardware.load(path=path) == audited
 
 
@@ -214,6 +221,7 @@ def test_load_refresh_forces_reaudit(monkeypatch: pytest.MonkeyPatch, tmp_path: 
 
 def test_save_and_load_round_trip_all_fields(tmp_path: Path) -> None:
     spec = SystemSpec(
+        platform=sys.platform,
         cpu_name="Intel Core i5-2300",
         ram_gb=16.0,
         gpu_name="NVIDIA GeForce GTX 1060",
@@ -228,6 +236,7 @@ def test_save_and_load_round_trip_all_fields(tmp_path: Path) -> None:
     assert written == path
     payload = json.loads(path.read_text(encoding="utf-8"))
     assert datetime.fromisoformat(payload["audited_at"]) == spec.audited_at
+    assert payload["platform"] == sys.platform
     assert payload["cpu_name"] is not None
     assert payload["ram_gb"] is not None
     assert payload["gpu_name"] is not None
@@ -239,6 +248,7 @@ def test_save_and_load_round_trip_all_fields(tmp_path: Path) -> None:
 def test_fixture_parse_yields_all_five_fields_and_round_trips(tmp_path: Path) -> None:
     parsed = hardware.parse_dxdiag(SAMPLE_TEXT)
     spec = SystemSpec(
+        platform=sys.platform,
         cpu_name=parsed.cpu_name,
         ram_gb=parsed.ram_gb,
         gpu_name=parsed.gpu_name,
@@ -259,12 +269,85 @@ def test_fixture_parse_yields_all_five_fields_and_round_trips(tmp_path: Path) ->
     assert loaded == spec
 
 
-def test_load_reads_cache_on_non_windows(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_load_reuses_matching_platform_cache_on_non_windows(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     path = tmp_path / "generated" / "system_spec.json"
-    hardware.save(OLD_SPEC, path=path)
+    spec = OLD_SPEC.model_copy(update={"platform": "linux"})
+    hardware.save(spec, path=path)
     monkeypatch.setattr(hardware.sys, "platform", "linux")
 
-    assert hardware.load(path=path) == OLD_SPEC
+    assert hardware.load(path=path) == spec
+
+
+def test_load_other_platform_cache_on_non_windows_reaudits(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    path = tmp_path / "generated" / "system_spec.json"
+    hardware.save(OLD_SPEC, path=path)  # audited on win32
+    monkeypatch.setattr(hardware.sys, "platform", "linux")
+
+    def explode(report_path: Path) -> None:
+        raise AssertionError("dxdiag must not run on non-Windows platforms")
+
+    monkeypatch.setattr(windows, "_run_dxdiag", explode)
+
+    with pytest.raises(hardware.UnsupportedPlatformError):
+        hardware.load(path=path)
+
+
+def test_load_reaudits_cache_from_other_platform(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _install_fake_windows(monkeypatch)
+    path = tmp_path / "generated" / "system_spec.json"
+    stale = OLD_SPEC.model_copy(update={"platform": "linux"})
+    hardware.save(stale, path=path)
+    calls = _install_fake_dxdiag(monkeypatch, SAMPLE_TEXT)
+    _install_fake_disk(monkeypatch, 148.25)
+
+    spec = hardware.load(path=path)
+
+    assert len(calls) == 1
+    assert spec.platform == "win32"
+    assert spec.cpu_name == "Intel(R) Core(TM) i7-9700K CPU"
+    assert json.loads(path.read_text(encoding="utf-8"))["platform"] == "win32"
+
+
+def test_load_migrates_legacy_cache_without_platform_key(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _install_fake_windows(monkeypatch)
+    path = tmp_path / "generated" / "system_spec.json"
+    path.parent.mkdir(parents=True)
+    legacy_payload = OLD_SPEC.model_dump(mode="json")
+    del legacy_payload["platform"]
+    path.write_text(json.dumps(legacy_payload), encoding="utf-8")
+    calls = _install_fake_dxdiag(monkeypatch, SAMPLE_TEXT)
+    _install_fake_disk(monkeypatch, 148.25)
+
+    spec = hardware.load(path=path)
+
+    assert len(calls) == 1
+    assert spec.platform == "win32"
+    assert spec.cpu_name == "Intel(R) Core(TM) i7-9700K CPU"
+    migrated = json.loads(path.read_text(encoding="utf-8"))
+    assert migrated["platform"] == "win32"
+    assert migrated["audited_at"] != legacy_payload["audited_at"]
+
+
+def test_system_spec_requires_platform() -> None:
+    assert SystemSpec.model_fields["platform"].is_required()
+
+    with pytest.raises(ValidationError):
+        SystemSpec(
+            cpu_name="Old CPU",
+            ram_gb=8.0,
+            gpu_name="Old GPU",
+            vram_gb=2.0,
+            disk_free_gb=10.0,
+            audited_at=datetime(2026, 1, 1, 12, 0, tzinfo=UTC),
+        )
 
 
 def test_load_corrupt_cache_raises_named_cache_error(tmp_path: Path) -> None:
@@ -412,9 +495,10 @@ def test_save_and_parse_stay_platform_independent(
 ) -> None:
     monkeypatch.setattr(hardware.sys, "platform", "linux")
     path = tmp_path / "generated" / "system_spec.json"
+    spec = OLD_SPEC.model_copy(update={"platform": "linux"})
 
-    assert hardware.save(OLD_SPEC, path=path) == path
-    assert hardware.load(path=path) == OLD_SPEC
+    assert hardware.save(spec, path=path) == path
+    assert hardware.load(path=path) == spec
     assert hardware.parse_dxdiag(SAMPLE_TEXT).vram_gb == 12.0
 
 

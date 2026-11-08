@@ -13,6 +13,7 @@ against a recorded report without spawning dxdiag or touching a real disk.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
@@ -147,6 +148,7 @@ def audit(*, path: Path = DEFAULT_SPEC_PATH) -> SystemSpec:
 
     info = parse_dxdiag(report_text)
     spec = SystemSpec(
+        platform=sys.platform,
         cpu_name=info.cpu_name,
         ram_gb=info.ram_gb,
         gpu_name=info.gpu_name,
@@ -161,7 +163,8 @@ def audit(*, path: Path = DEFAULT_SPEC_PATH) -> SystemSpec:
 def load(*, refresh: bool = False, path: Path = DEFAULT_SPEC_PATH) -> SystemSpec:
     """Return the cached audit, running a fresh one only when needed.
 
-    ``refresh=False`` reads an existing ``system_spec.json``; a missing cache
+    ``refresh=False`` reads an existing ``system_spec.json`` only when it was
+    written on the current platform; a missing, legacy, or other-platform cache
     triggers an audit. ``refresh=True`` always re-audits (``--refresh-spec``).
     """
     if not refresh:
@@ -197,7 +200,12 @@ def save(spec: SystemSpec, *, path: Path = DEFAULT_SPEC_PATH) -> Path:
 
 
 def _read_cache(path: Path) -> SystemSpec | None:
-    """Return the validated cache, or ``None`` when the file does not exist."""
+    """Return the validated cache, or ``None`` when it must be re-audited.
+
+    A missing file, a cache written on another platform, and a legacy 0.1.0
+    cache without the ``platform`` key all count as a miss, so :func:`load`
+    migrates them by running a fresh audit.
+    """
     try:
         payload = path.read_text(encoding="utf-8")
     except FileNotFoundError:
@@ -207,7 +215,20 @@ def _read_cache(path: Path) -> SystemSpec | None:
         raise HardwareCacheError(msg) from exc
 
     try:
-        return SystemSpec.model_validate_json(payload)
+        data = json.loads(payload)
+    except json.JSONDecodeError as exc:
+        msg = f"invalid system spec cache at {path}: {exc}"
+        raise HardwareCacheError(msg) from exc
+
+    if not isinstance(data, dict):
+        msg = f"invalid system spec cache at {path}: expected a JSON object"
+        raise HardwareCacheError(msg)
+
+    if data.get("platform") != sys.platform:
+        return None
+
+    try:
+        return SystemSpec.model_validate(data)
     except ValidationError as exc:
         msg = f"invalid system spec cache at {path}: {exc}"
         raise HardwareCacheError(msg) from exc
