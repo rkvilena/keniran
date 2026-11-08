@@ -1,0 +1,7 @@
+00:00.0 "Host bridge" "Intel Corporation" "12th Gen Core Processor Host Bridge/DRAM Registers" "ASUSTeK Computer Inc." "Device 8887"
+00:02.0 "VGA compatible controller" "Intel Corporation" "Alder Lake-S GT1 [UHD Graphics 730]" "Intel Corporation" "Device 2212"
+00:1f.3 "Audio device" "Intel Corporation" "Alder Lake-S PCH High Definition Audio Controller" "ASUSTeK Computer Inc." "Device 8826"
+00:1f.4 "SMBus" "Intel Corporation" "Alder Lake-S PCH SMBus Controller" "ASUSTeK Computer Inc." "Device 8841"
+01:00.0 "3D controller" "NVIDIA Corporation" "GA102 [GeForce RTX 3080] [10DE:2206]" "ASUSTeK Computer Inc." "Device 8867"
+01:00.1 "Audio device" "NVIDIA Corporation" "GA102 High Definition Audio Controller [10DE:2209]" "ASUSTeK Computer Inc." "Device 8867"
+02:00.0 "Ethernet controller" "Realtek Semiconductor Co., Ltd." "RTL8125 2.5GbE Controller" "ASUSTeK Computer Inc." "Device 8867"

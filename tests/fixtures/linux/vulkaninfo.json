@@ -1,0 +1,54 @@
+{
+  "vulkan": {
+    "apiVersion": "1.3.204",
+    "devices": [
+      {
+        "devices": {
+          "deviceName": "NVIDIA GeForce RTX 3080",
+          "pipelineCacheUUID": [24, 68, 88, 149, 16, 158, 158, 79, 181, 191, 25, 13, 247, 251, 14, 159]
+        },
+        "properties": {
+          "apiVersion": 4207027,
+          "driverVersion": 2131984640,
+          "vendorID": 4318,
+          "deviceID": 8726,
+          "deviceType": 2,
+          "deviceName": "NVIDIA GeForce RTX 3080"
+        },
+        "memory": {
+          "memoryTypes": [
+            {"heapIndex": 0, "propertyFlags": 1},
+            {"heapIndex": 1, "propertyFlags": 7}
+          ],
+          "memoryHeaps": [
+            {"flags": 1, "size": 10737418240, "budget": 9663676416},
+            {"flags": 0, "size": 25769803776, "budget": 7372115968}
+          ]
+        }
+      },
+      {
+        "devices": {
+          "deviceName": "Intel(R) UHD Graphics 730",
+          "pipelineCacheUUID": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+        },
+        "properties": {
+          "apiVersion": 4206803,
+          "driverVersion": 2583384064,
+          "vendorID": 32902,
+          "deviceID": 8722,
+          "deviceType": 1,
+          "deviceName": "Intel(R) UHD Graphics 730"
+        },
+        "memory": {
+          "memoryTypes": [
+            {"heapIndex": 0, "propertyFlags": 15},
+            {"heapIndex": 0, "propertyFlags": 14}
+          ],
+          "memoryHeaps": [
+            {"flags": 1, "size": 8053063680, "budget": 8053063680}
+          ]
+        }
+      }
+    ]
+  }
+}

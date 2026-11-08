@@ -161,3 +161,254 @@ def test_parse_proc_meminfo_returns_none_for_malformed_text(text: str) -> None:
 def test_parsers_do_not_raise_on_hostile_text(text: str) -> None:
     assert linux.parse_proc_cpuinfo(text) is None
     assert linux.parse_proc_meminfo(text) is None
+
+
+# --- LIN-002: GPU/VRAM parsers -----------------------------------------------
+
+LSPCI_MM_TEXT = (FIXTURES / "lspci_mm.txt").read_text(encoding="utf-8")
+NVIDIA_SMI_TEXT = (FIXTURES / "nvidia_smi.txt").read_text(encoding="utf-8")
+VULKANINFO_TEXT = (FIXTURES / "vulkaninfo.json").read_text(encoding="utf-8")
+
+
+# Inline ``lspci -mm`` dumps are built through this helper because real recorded
+# lines exceed the 100-column limit; the rendered text is identical to what
+# ``lspci -mm`` emits on the wire (``slot "class" "vendor" "device"
+# "subvendor" "subdevice"``, no bare flags — ``(rev a1)`` only ever appears
+# inside the quoted device field).
+def _lspci_mm_line(slot: str, klass: str, vendor: str, device: str) -> str:
+    return f'{slot} "{klass}" "{vendor}" "{device}" "ASUSTeK Computer Inc." "Device 8867"'
+
+
+NVIDIA_VENDOR = "NVIDIA Corporation"
+INTEL_VENDOR = "Intel Corporation"
+RTX_3080 = "GA102 [GeForce RTX 3080]"
+UHD_730 = "Alder Lake-S GT1 [UHD Graphics 730]"
+
+# Recorded iGPU-first order: the integrated Intel adapter appears before the
+# discrete NVIDIA card, so class precedence (not line order) must pick the dGPU.
+LSPCI_LAPTOP_IGPU_FIRST_TEXT = (
+    "\n".join(
+        [
+            _lspci_mm_line("00:02.0", "VGA compatible controller", INTEL_VENDOR, UHD_730),
+            _lspci_mm_line("01:00.0", "3D controller", NVIDIA_VENDOR, RTX_3080),
+        ]
+    )
+    + "\n"
+)
+
+# Desktop case: the dGPU reports as "VGA compatible controller" while the
+# iGPU reports as "Display controller"; VGA must still win.
+LSPCI_DESKTOP_DGPU_VGA_TEXT = (
+    "\n".join(
+        [
+            _lspci_mm_line("01:00.0", "VGA compatible controller", NVIDIA_VENDOR, RTX_3080),
+            _lspci_mm_line("00:02.0", "Display controller", INTEL_VENDOR, UHD_730),
+        ]
+    )
+    + "\n"
+)
+
+LSPCI_UNRESOLVED_CLASS_TEXT = (
+    _lspci_mm_line("01:00.0", "Class 0302", NVIDIA_VENDOR, RTX_3080) + "\n"
+)
+
+LSPCI_SINGLE_VGA_TEXT = (
+    _lspci_mm_line("00:02.0", "VGA compatible controller", INTEL_VENDOR, UHD_730) + "\n"
+)
+
+LSPCI_REV_TAG_TEXT = (
+    _lspci_mm_line("01:00.0", "3D controller", NVIDIA_VENDOR, "GM204 [GeForce GTX 970] (rev a1)")
+    + "\n"
+)
+
+LSPCI_LHR_TEXT = (
+    _lspci_mm_line(
+        "01:00.0",
+        "VGA compatible controller",
+        NVIDIA_VENDOR,
+        "GA102 [GeForce RTX 3080 Lite Hash Rate]",
+    )
+    + "\n"
+)
+
+
+def test_parse_lspci_returns_fixture_dgpu_name() -> None:
+    assert linux.parse_lspci(LSPCI_MM_TEXT) == "GeForce RTX 3080"
+
+
+def test_parse_lspci_picks_dgpu_when_igpu_listed_first() -> None:
+    assert linux.parse_lspci(LSPCI_LAPTOP_IGPU_FIRST_TEXT) == "GeForce RTX 3080"
+
+
+def test_parse_lspci_vga_dgpu_beats_display_igpu() -> None:
+    assert linux.parse_lspci(LSPCI_DESKTOP_DGPU_VGA_TEXT) == "GeForce RTX 3080"
+
+
+def test_parse_lspci_handles_unresolvable_class_code() -> None:
+    assert linux.parse_lspci(LSPCI_UNRESOLVED_CLASS_TEXT) == "GeForce RTX 3080"
+
+
+def test_parse_lspci_returns_single_vga_device_name() -> None:
+    assert linux.parse_lspci(LSPCI_SINGLE_VGA_TEXT) == "UHD Graphics 730"
+
+
+def test_parse_lspci_strips_revision_tag() -> None:
+    assert linux.parse_lspci(LSPCI_REV_TAG_TEXT) == "GeForce GTX 970"
+
+
+def test_parse_lspci_strips_lite_hash_rate_suffix() -> None:
+    assert linux.parse_lspci(LSPCI_LHR_TEXT) == "GeForce RTX 3080"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "",
+        "\n\n",
+        "not an lspci dump at all",
+        '01:00.0 "3D controller" "NVIDIA Corporation"',
+        '01:00.0 "Host bridge" "Intel Corporation" "12th Gen Core Processor"',
+        '01:00.0 "3D controller" "NVIDIA Corporation" ""',
+        "💥",
+        "\x00\x01\x02",
+    ],
+)
+def test_parse_lspci_returns_none_for_malformed_text(text: str) -> None:
+    assert linux.parse_lspci(text) is None
+
+
+def test_parse_nvidia_smi_vram_returns_fixture_total_gb() -> None:
+    assert linux.parse_nvidia_smi_vram(NVIDIA_SMI_TEXT) == 10.0
+
+
+def test_parse_nvidia_smi_vram_converts_mib_to_gb() -> None:
+    assert linux.parse_nvidia_smi_vram("| 10240MiB / 12288MiB |") == 12.0
+    assert linux.parse_nvidia_smi_vram("  512MiB / 8192MiB ") == 8.0
+
+
+def test_parse_nvidia_smi_vram_largest_gpu_wins() -> None:
+    text = "|   0  ... | 512MiB / 8192MiB |  ...  | 1  ... | 1024MiB / 12288MiB |\n"
+
+    assert linux.parse_nvidia_smi_vram(text) == 12.0
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "",
+        "\n\n",
+        "not an nvidia-smi report at all",
+        "Fri Nov  6 21:14:07 2026",
+        "| 512MiB |",
+        "| 512MiB / N/A |",
+        "| 512MiB / 10240 MB |",
+        "| 512MiB / -10240MiB |",
+        "| / 10240MiB |",
+        "| 512MiB / " + "9" * 400 + "MiB |",
+        "💥",
+        "\x00\x01\x02",
+    ],
+)
+def test_parse_nvidia_smi_vram_returns_none_for_malformed_text(text: str) -> None:
+    assert linux.parse_nvidia_smi_vram(text) is None
+
+
+def test_parse_vulkaninfo_returns_fixture_device_local_heap_gb() -> None:
+    # The RTX 3080's device-local heap (10737418240 B) beats the iGPU's 7.5 GiB;
+    # both unflagged host heaps (25769803776 B) must be ignored.
+    assert linux.parse_vulkaninfo(VULKANINFO_TEXT) == 10.0
+
+
+def test_parse_vulkaninfo_ignores_non_device_local_heap() -> None:
+    text = """\
+{
+  "vulkan": {
+    "devices": [
+      {
+        "memory": {
+          "memoryHeaps": [
+            {"flags": 0, "size": 25769803776},
+            {"flags": 1, "size": 1073741824}
+          ]
+        }
+      }
+    ]
+  }
+}
+"""
+
+    assert linux.parse_vulkaninfo(text) == 1.0
+
+
+def test_parse_vulkaninfo_handles_keyed_gpu_dict_form() -> None:
+    text = """\
+{
+  "vulkan": {
+    "devices": {
+      "GPU0": {
+        "memory": {"memoryHeaps": [{"flags": 1, "size": 10737418240}]}
+      }
+    }
+  }
+}
+"""
+
+    assert linux.parse_vulkaninfo(text) == 10.0
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "",
+        "\n\n",
+        "not json at all",
+        "💥",
+        "\x00\x01\x02",
+        "{}",
+        "[]",
+        '{"vulkan": null}',
+        '{"vulkan": {}}',
+        '{"vulkan": {"devices": []}}',
+        '{"vulkan": {"devices": [{"memory": {}}]}}',
+        '{"vulkan": {"devices": [{"memory": {"memoryHeaps": []}}]}}',
+        '{"vulkan": {"devices": [{"memory": {"memoryHeaps": ['
+        '{"flags": 0, "size": 10737418240}]}}]}}',
+        '{"vulkan": {"devices": [{"memory": {"memoryHeaps": [{"flags": 1, "size": "huge"}]}}]}}',
+        '{"vulkan": {"devices": [null]}}',
+    ],
+)
+def test_parse_vulkaninfo_returns_none_for_malformed_text(text: str) -> None:
+    assert linux.parse_vulkaninfo(text) is None
+
+
+def test_clean_linux_name_promotes_marketing_bracket() -> None:
+    assert linux._clean_linux_name("GA102 [GeForce RTX 3080]") == "GeForce RTX 3080"
+
+
+def test_clean_linux_name_promotes_first_marketing_bracket_only() -> None:
+    assert linux._clean_linux_name("GA102 [GeForce RTX 3080] [10DE:2206]") == "GeForce RTX 3080"
+
+
+def test_clean_linux_name_strips_non_marketing_brackets() -> None:
+    assert linux._clean_linux_name("NVIDIA GA102 [10DE:2206]") == "NVIDIA GA102"
+
+
+def test_clean_linux_name_strips_revision_tag() -> None:
+    assert linux._clean_linux_name("GeForce GTX 970 (rev a1)") == "GeForce GTX 970"
+
+
+def test_clean_linux_name_strips_lite_hash_rate() -> None:
+    assert linux._clean_linux_name("GeForce RTX 3080 Lite Hash Rate") == "GeForce RTX 3080"
+
+
+def test_clean_linux_name_collapses_whitespace() -> None:
+    assert linux._clean_linux_name("GA102  [GeForce   RTX 3080]  [10DE:2206] ") == (
+        "GeForce RTX 3080"
+    )
+
+
+def test_gpu_parsers_do_not_raise_on_hostile_text() -> None:
+    for text in ("\x00\x01\x02", "💥"):
+        assert linux.parse_lspci(text) is None
+        assert linux.parse_nvidia_smi_vram(text) is None
+        assert linux.parse_vulkaninfo(text) is None
