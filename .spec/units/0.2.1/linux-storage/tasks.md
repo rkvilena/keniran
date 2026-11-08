@@ -1,6 +1,7 @@
 # Tasks — 0.2.1/linux-storage
 
-- [ ] LSTO-001: Linux partition gatherer — pseudo-fs denylist + same-device dedupe
+- [x] LSTO-001: Linux partition gatherer — pseudo-fs denylist + same-device dedupe
+  status: done (commit 0c692a5)
   depends: -
   files: src/keniran/adapters/hardware/linux.py, tests/fixtures/linux/disk_partitions.json, tests/test_hardware_linux.py
   pattern: windows.py `_collect_partitions()` (STO-001 helper consumption shape)
@@ -34,7 +35,8 @@
     9p handling changes (helper network-list contract is frozen), Steam-library
     mount detection (backlog)
 
-- [ ] LSTO-002: Wire the shared helper into linux `audit()` — disk_free_gb + mount provenance
+- [x] LSTO-002: Wire the shared helper into linux `audit()` — disk_free_gb + mount provenance
+  status: done (commit 971b743)
   depends: LSTO-001
   files: src/keniran/adapters/hardware/linux.py, tests/test_hardware_linux.py
   pattern: windows.py audit() lines 153–161 (storage = select_storage_free(None, _collect_partitions()))
