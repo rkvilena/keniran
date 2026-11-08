@@ -1,6 +1,7 @@
 # Tasks — 0.2.0/ratio-scoring
 
-- [ ] SCO-001: Scoring core: RAM/VRAM ratios join the verdict min
+- [x] SCO-001: Scoring core: RAM/VRAM ratios join the verdict min
+  status: done (commit 3142f3f)
   depends: -
   files: src/keniran/core/scoring.py, src/keniran/core/models.py, tests/test_scoring.py
   pattern: component_ratio + final_ratio + build_verdict in scoring.py
@@ -19,7 +20,8 @@
       python -m pytest -q && python -m mypy
   out-of-scope: check_game/report wiring, storage mounting, any display change
 
-- [ ] SCO-002: Pipeline wiring: RAM/VRAM rows show ratios, storage stays binary
+- [x] SCO-002: Pipeline wiring: RAM/VRAM rows show ratios, storage stays binary
+  status: done (commit e0a0802)
   depends: SCO-001
   files: src/keniran/services/check_game.py, tests/test_check_game.py
   pattern: _benchmark_row for ratio rows; _hard_check_row kept for storage

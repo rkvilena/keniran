@@ -1,6 +1,7 @@
 # Tasks — 0.2.0/storage-mounts
 
-- [ ] STO-001: Any-local-mount storage check, wired into both hardware backends
+- [x] STO-001: Any-local-mount storage check, wired into both hardware backends
+  status: done (commit 12ca965)
   depends: -
   files: src/keniran/adapters/hardware/storage.py, src/keniran/adapters/hardware/windows.py, src/keniran/core/models.py, src/keniran/services/check_game.py, tests/test_hardware.py, tests/test_check_game.py
   pattern: psutil.disk_usage usage in windows.py (cross-platform core already)

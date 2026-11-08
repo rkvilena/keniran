@@ -5,6 +5,38 @@ Append-only. Newest first within each release block. Every entry inherits the ru
 
 ---
 
+## Release 0.2.1 (defined in interview 2026-11-08)
+
+- A new patch release **0.2.1** carries the Linux any-local-mount storage follow-up;
+  **0.2.0 stays frozen** (done units untouched, feature unit lives at
+  `0.2.1/linux-storage`, prefix `LSTO`; release chores prefix `REL21`). Offered the
+  user the reopen-0.2.0 option; they chose the fresh release to keep version
+  labels canonical. (source: user interview 2026-11-08)
+- Linux storage wiring = **reuse the shared helper, no helper edits**:
+  `select_storage_free` (STO-001 contract) stays pure and backend-agnostic; all
+  Linux-specific filtering lives in the Linux gatherer, mirroring
+  `windows.py::_collect_partitions()` — two platforms, same port, no pattern
+  change. (source: user interview 2026-11-08)
+- **Linux pseudo-filesystem denylist, Linux-side**: `tmpfs` (RAM-sized → inflated
+  free space → false PASS), `squashfs` (read-only snap content), `proc`, `sysfs`,
+  `devtmpfs`, `efivarfs`, `overlay`, `ramfs` excluded before the helper sees them.
+  `fuseblk`/ntfs data partitions deliberately still eligible (low-end dual-boot
+  reality). Rejected extending the shared helper with a "writability" concept —
+  would reopen frozen STO-001 work for helper logic only Linux needs. (source: user
+  interview 2026-11-08)
+- **Same-device dedupe**: mounts sharing one block device collapse to the
+  mountpoint with the most free space (merged-usr / bind setups present one
+  filesystem as several mounts). (source: user interview 2026-11-08)
+- **Honesty upgrade on the Linux path**: nothing measurable → `disk_free_gb=None`
+  (unverified ⚠) instead of the legacy root-failure `0.0`; `0.0` fabricated a
+  number the machine never proved. Windows path already stores None via the
+  helper. (source: user interview 2026-11-08)
+- **Correction recorded**: 0.2.0 STO-001's expectation that LIN-003 would wire the
+  helper into the Linux audit was not implemented (linux.py kept root-only
+  `_disk_free_gb`, and `audit()` never set `storage_used_mount`); the README
+  honestly labeled it a known follow-up. `0.2.1/linux-storage` realizes the
+  deferred wiring. (source: state audit of code + unit ledgers, 2026-11-08)
+
 ## Release 0.2.0 (planned; defined in interview 2026-11-08)
 
 - Version labels are canonical, not generational: **0.1.0** (current release), **0.2.0**
@@ -57,3 +89,16 @@ Append-only. Newest first within each release block. Every entry inherits the ru
   in-memory cache only; missing requirements → graceful message. (source: plan/decisions.md §6)
 - Toolchain pinned exactly; gate order ruff format → ruff check → mypy → pytest. (source: plan/decisions.md §7)
 - Databases vendored as-is; version single-sourced in `pyproject.toml`. (source: plan/decisions.md §8)
+
+## Post-0.2.0 backlog — WSL smoke finding (added 2026-11-08)
+
+- **Fuzzy-match honesty threshold on unnamed GPUs:** during the REL-004 WSL smoke,
+  `lspci` without the pciutils ID database reported the GPU as `Device 008e` (no
+  human-readable name), yet the benchmark matcher still scored it a clean 100% pass
+  against the required GPU instead of degrading to `unverified ⚠`. Concern: an
+  unnamed/garbage device string can fuzzy-match far enough to produce a confident
+  verdict, which sits badly with the honesty gate. Action: define and enforce a
+  match-confidence floor for benchmark lookup (e.g. reject matches whose fuzzy score
+  or clean-name quality is too low, degrade to unverified), and re-check behavior on
+  a native Linux box where real device names exist. (source: WSL smoke run,
+  app 2679460, 2026-11-08)

@@ -1,6 +1,7 @@
 # Tasks — 0.2.0/linux-audit
 
-- [ ] LIN-001: Linux CPU/RAM parsers (pure) + fixture-capture script
+- [x] LIN-001: Linux CPU/RAM parsers (pure) + fixture-capture script
+  status: done (commit 0a43fa7)
   depends: -
   files: src/keniran/adapters/hardware/linux.py, scripts/capture_linux_fixtures.sh, tests/fixtures/linux/proc_cpuinfo.txt, tests/fixtures/linux/proc_meminfo.txt, tests/test_hardware_linux.py
   pattern: tests/fixtures/dxdiag_sample.txt + parse_dxdiag pure-function pattern
@@ -17,7 +18,8 @@
       python -m ruff check . && python -m mypy
   out-of-scope: GPU/VRAM parsing, subprocess running, audit assembly, name cleanup
 
-- [ ] LIN-002: GPU/VRAM parsers + Linux name-cleanup normalizer
+- [x] LIN-002: GPU/VRAM parsers + Linux name-cleanup normalizer
+  status: done (commit 81733e8)
   depends: LIN-001
   files: src/keniran/adapters/hardware/linux.py, tests/fixtures/linux/lspci_mm.txt, tests/fixtures/linux/nvidia_smi.txt, tests/fixtures/linux/vulkaninfo.json, tests/test_hardware_linux.py
   pattern: dxdiag multi-card "best wins" approach in windows.py
@@ -36,7 +38,8 @@
   out-of-scope: running the tools (subprocess), audit assembly, `eglinfo` (implement
   only if nvidia-smi+lspci both miss a fixture case in LIN-003)
 
-- [ ] LIN-003: Linux audit assembly, dispatch wiring, WSL smoke
+- [x] LIN-003: Linux audit assembly, dispatch wiring, WSL smoke
+  status: done (commit 2420b9d)
   depends: LIN-002, SYS-003
   files: src/keniran/adapters/hardware/linux.py, src/keniran/adapters/hardware/__init__.py, tests/test_hardware_linux.py
   pattern: audit/load/save orchestration in windows.py

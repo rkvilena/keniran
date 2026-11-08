@@ -1,6 +1,7 @@
 # Tasks — 0.2.0/model-layout
 
-- [ ] SYS-001: Split hardware module into a platform-dispatched package
+- [x] SYS-001: Split hardware module into a platform-dispatched package
+  status: done (commit f43e66b)
   depends: -
   files: src/keniran/adapters/hardware/__init__.py, src/keniran/adapters/hardware/windows.py (moved content of hardware.py), tests/test_hardware.py
   pattern: existing src/keniran/adapters/hardware.py (move, don't rewrite)
@@ -17,7 +18,8 @@
       python -m ruff check . && python -m mypy
   out-of-scope: any Linux code, model changes, scoring changes
 
-- [ ] SYS-002: SystemSpec gains `platform` field; cache re-audits on OS mismatch
+- [x] SYS-002: SystemSpec gains `platform` field; cache re-audits on OS mismatch
+  status: done (commit 652cb14)
   depends: SYS-001
   files: src/keniran/core/models.py, src/keniran/adapters/hardware/__init__.py, src/keniran/adapters/hardware/windows.py, tests/test_hardware.py
   pattern: existing audit/load/save cache tests
@@ -32,7 +34,8 @@
       python -m pytest -q && python -m mypy
   out-of-scope: vram optionality, anything Linux
 
-- [ ] SYS-003: Make `vram_gb` optional with interim unverified handling
+- [x] SYS-003: Make `vram_gb` optional with interim unverified handling
+  status: done (commit 0c71484)
   depends: SYS-002
   files: src/keniran/core/models.py, src/keniran/adapters/hardware/windows.py, src/keniran/services/check_game.py, tests/test_check_game.py
   pattern: existing `_hard_check_row` None-handling (meets_minimum already returns None for unknown sides)

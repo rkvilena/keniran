@@ -1,6 +1,7 @@
 # Tasks — 0.2.0 (release chores)
 
-- [ ] REL-001: Version bump to 0.2.0
+- [x] REL-001: Version bump to 0.2.0
+  status: done (commit 0fa1860)
   depends: -
   gated: 0.2.0/model-layout, 0.2.0/linux-audit, 0.2.0/ratio-scoring, 0.2.0/storage-mounts
   files: pyproject.toml
@@ -11,7 +12,8 @@
     acceptance commands: python -m pytest -q
   out-of-scope: changelog file creation (recorded in REL-002/REL-003 docs sweep)
 
-- [ ] REL-002: Update plan/decisions.md to the 0.2.0 record
+- [x] REL-002: Update plan/decisions.md to the 0.2.0 record
+  status: done (no commit — plan/ is gitignored by design; file updated on disk, verified 183 green)
   depends: -
   gated: 0.2.0/model-layout, 0.2.0/linux-audit, 0.2.0/ratio-scoring, 0.2.0/storage-mounts
   files: plan/decisions.md
@@ -30,7 +32,8 @@
   out-of-scope: detailed-flow.md / benchmark-db.md rewrites (only if they contradict
   0.2.0 semantics — surgical line fixes allowed there)
 
-- [ ] REL-003: README Linux support section
+- [x] REL-003: README Linux support section
+  status: done (commit 9f0766f)
   depends: -
   gated: 0.2.0/model-layout, 0.2.0/linux-audit
   files: README.md (or the repo's root readme file if named differently)
@@ -42,7 +45,8 @@
     acceptance commands: python -m pytest -q
   out-of-scope: Windows/v0.1.0 content beyond a version note
 
-- [ ] REL-004: Full acceptance gate run for 0.2.0
+- [x] REL-004: Full acceptance gate run for 0.2.0
+  status: done (commits e286278 + 9fc6934 — gate follow-up fixes; see run log)
   depends: -
   gated: 0.2.0/model-layout, 0.2.0/linux-audit, 0.2.0/ratio-scoring, 0.2.0/storage-mounts
   files: (none — verification only)
