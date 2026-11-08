@@ -2,7 +2,8 @@
 
 Implements the orchestration of spec §3 steps 1-7: cached hardware audit →
 Steam appdetails fetch → HTML strip → rules-only parse → CPU/GPU benchmark
-lookups plus RAM/VRAM/Storage hard checks → verdict. Rendering is intentionally
+lookups plus RAM/VRAM capacity ratios and a storage hard check → verdict.
+Rendering is intentionally
 absent; CLI and future UIs consume the plain :class:`~keniran.core.models.Report`
 returned here.
 
@@ -106,8 +107,16 @@ def check_game(
         target_match=target_gpu,
         target_unverified=ComponentName.GPU in requirements.unverified,
     )
-    ram_row = _hard_check_row(ComponentName.RAM, system_spec.ram_gb, requirements.ram_gb)
-    vram_row = _hard_check_row(ComponentName.VRAM, system_spec.vram_gb, requirements.vram_gb)
+    ram_row, ram_ratio = _capacity_row(
+        ComponentName.RAM,
+        user_value=system_spec.ram_gb,
+        required_value=requirements.ram_gb,
+    )
+    vram_row, vram_ratio = _capacity_row(
+        ComponentName.VRAM,
+        user_value=system_spec.vram_gb,
+        required_value=requirements.vram_gb,
+    )
     storage_row = _hard_check_row(
         ComponentName.STORAGE,
         system_spec.disk_free_gb,
@@ -118,6 +127,8 @@ def check_game(
     verdict = scoring.build_verdict(
         cpu_ratio,
         gpu_ratio,
+        ram_ratio=ram_ratio,
+        vram_ratio=vram_ratio,
         shortfalls=shortfalls,
         st_ratio=_single_thread_ratio(user_cpu, target_cpu),
     )
@@ -176,12 +187,44 @@ def _benchmark_row(
     return row, ratio
 
 
+def _capacity_row(
+    component: ComponentName,
+    *,
+    user_value: float | None,
+    required_value: float | None,
+) -> tuple[ComponentRow, float | None]:
+    """Build one RAM/VRAM ratio row from the published capacity minimum.
+
+    A ratio needs a usable capacity on both sides (plan/decisions.md §4). An
+    unknown user capacity (for example unreported VRAM) or a not-published
+    required capacity leaves ``ratio``/``passed`` as ``None`` and flags the row
+    ``unverified`` so the report shows ⚠ and the component is excluded from
+    the bottleneck ``min`` instead of inventing a comparison (§4.5).
+    """
+    ratio = (
+        scoring.capacity_ratio(user_value, required_value)
+        if user_value is not None and required_value is not None and required_value > 0
+        else None
+    )
+    row = ComponentRow(
+        component=component,
+        user_value=(_format_gigabytes(user_value) if user_value is not None else UNVERIFIED_VALUE),
+        required_value=(
+            _format_gigabytes(required_value) if required_value is not None else NOT_PUBLISHED_VALUE
+        ),
+        ratio=ratio,
+        passed=None,
+        unverified=ratio is None,
+    )
+    return row, ratio
+
+
 def _hard_check_row(
     component: ComponentName,
     user_value: float | None,
     required_value: float | None,
 ) -> ComponentRow:
-    """Build one RAM/VRAM/Storage row from the direct numeric minimum check."""
+    """Build one storage row from the direct numeric minimum check."""
     passed = scoring.meets_minimum(user_value, required_value)
     return ComponentRow(
         component=component,

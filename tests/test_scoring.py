@@ -168,7 +168,9 @@ def test_final_ratio_is_minimum_of_available_components() -> None:
 def test_final_ratio_includes_capacity_ratios() -> None:
     assert scoring.final_ratio(1.25, 0.8, ram_ratio_value=0.9) == pytest.approx(0.8)
     assert scoring.final_ratio(None, None, ram_ratio_value=0.969) == pytest.approx(0.969)
-    assert scoring.final_ratio(1.5, 1.4, ram_ratio_value=0.9, vram_ratio_value=0.95) == pytest.approx(0.9)
+    assert scoring.final_ratio(
+        1.5, 1.4, ram_ratio_value=0.9, vram_ratio_value=0.95
+    ) == pytest.approx(0.9)
     assert scoring.final_ratio(None, None, ram_ratio_value=None, vram_ratio_value=None) is None
 
 
@@ -258,7 +260,10 @@ def test_unverified_ram_does_not_cap_passing_verdict() -> None:
     assert verdict.band is VerdictBand.PASS
     assert verdict.spec_shortfall is False
     assert verdict.shortfall_components == []
-    assert verdict.percentage_text == "100% of the game's minimum requirement (Pass — meets requirement)"
+    assert (
+        verdict.percentage_text
+        == "100% of the game's minimum requirement (Pass — meets requirement)"
+    )
 
 
 def test_st_warning_only_when_multithread_cpu_passes() -> None:

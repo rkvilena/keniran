@@ -139,7 +139,8 @@ def test_pass_case_returns_full_green_report(benchmark_db: dict[str, Any]) -> No
     assert report.message is None
     assert report.verdict is not None
     assert report.verdict.band is VerdictBand.PASS
-    assert report.verdict.ratio == pytest.approx(9400.0 / 3420.0)
+    # The RAM ratio (16/8 = 2.0) is the bottleneck, below CPU and GPU ratios.
+    assert report.verdict.ratio == pytest.approx(2.0)
     assert report.verdict.display_percent == 100.0
     assert report.verdict.spec_shortfall is False
     assert report.verdict.st_warning is False
@@ -159,13 +160,17 @@ def test_pass_case_returns_full_green_report(benchmark_db: dict[str, Any]) -> No
     assert gpu_row.ratio == pytest.approx(11083.0 / 1873.0)
     assert gpu_row.matched_name == "NVIDIA GeForce GTX 650 Ti"
     assert gpu_row.unverified is False
-    assert ram_row.passed is True
-    assert vram_row.passed is True
+    assert ram_row.ratio == pytest.approx(16.0 / 8.0)
+    assert ram_row.passed is None
+    assert ram_row.unverified is False
+    assert vram_row.ratio == pytest.approx(6.0 / 2.0)
+    assert vram_row.passed is None
+    assert vram_row.unverified is False
     assert storage_row.passed is True
     assert not any(row.unverified for row in report.components)
 
 
-def test_hard_shortfalls_cap_verdict_at_fail_despite_good_ratios(
+def test_storage_shortfall_caps_verdict_at_fail_and_ram_vram_join_ratio_min(
     benchmark_db: dict[str, Any],
 ) -> None:
     spec = _system_spec(ram_gb=8.0, vram_gb=2.0, disk_free_gb=10.0)
@@ -179,7 +184,9 @@ def test_hard_shortfalls_cap_verdict_at_fail_despite_good_ratios(
 
     assert report.verdict is not None
     assert report.verdict.ratio is not None
-    assert report.verdict.ratio >= 1.0
+    # RAM/VRAM ratios (0.5 each) now join the bottleneck min; the storage
+    # shortfall still caps the band at FAIL regardless.
+    assert report.verdict.ratio == pytest.approx(0.5)
     assert report.verdict.band is VerdictBand.FAIL
     assert report.verdict.spec_shortfall is True
     assert set(report.verdict.shortfall_components) == {
@@ -187,8 +194,12 @@ def test_hard_shortfalls_cap_verdict_at_fail_despite_good_ratios(
     }
 
     rows = {row.component: row for row in report.components}
-    assert rows[ComponentName.RAM].passed is False
-    assert rows[ComponentName.VRAM].passed is False
+    # RAM/VRAM no longer hard-check: they are ratio rows folded into the
+    # bottleneck min, and only storage remains a boolean shortfall.
+    assert rows[ComponentName.RAM].ratio == pytest.approx(8.0 / 16.0)
+    assert rows[ComponentName.RAM].passed is None
+    assert rows[ComponentName.VRAM].ratio == pytest.approx(2.0 / 4.0)
+    assert rows[ComponentName.VRAM].passed is None
     assert rows[ComponentName.STORAGE].passed is False
 
 
@@ -209,6 +220,7 @@ def test_unknown_user_vram_is_unverified_and_not_a_shortfall(
 
     vram_row = next(row for row in report.components if row.component is ComponentName.VRAM)
     assert vram_row.passed is None
+    assert vram_row.ratio is None
     assert vram_row.unverified is True
     assert vram_row.user_value == "unverified"
     assert vram_row.required_value == "4 GB"
@@ -242,7 +254,9 @@ def test_generic_target_gpu_row_is_unverified_but_verdict_still_produced(
 
     vram_row = report.components[3]
     assert vram_row.component is ComponentName.VRAM
-    assert vram_row.passed is True
+    # The published generic VRAM floor is 1 GB, so the ratio is 6/1.
+    assert vram_row.ratio == pytest.approx(6.0 / 1.0)
+    assert vram_row.unverified is False
 
 
 def test_one_sided_user_cpu_lookup_marks_row_unverified(
@@ -256,8 +270,9 @@ def test_one_sided_user_cpu_lookup_marks_row_unverified(
     assert cpu_row.unverified is True
     assert cpu_row.ratio is None
     assert report.verdict is not None
-    # The GPU side is still scorable, so the verdict is not UNVERIFIED.
-    assert report.verdict.ratio == pytest.approx(11083.0 / 1873.0)
+    # The GPU side is still scorable, so the verdict is not UNVERIFIED;
+    # the RAM ratio (16/8 = 2.0) is the bottleneck.
+    assert report.verdict.ratio == pytest.approx(2.0)
 
 
 def test_below_gate_target_match_surfaces_name_and_confidence(
@@ -391,6 +406,57 @@ def test_hardware_loader_called_once_with_refresh_flag(
 
     assert calls == [refresh_spec]
     assert report.verdict is not None
+
+
+def test_not_published_ram_leaves_unverified_row_excluded_from_min(
+    benchmark_db: dict[str, Any],
+) -> None:
+    html = (
+        "<strong>Minimum:</strong><br><ul>"
+        "<li><strong>Processor:</strong> Intel Core i5-2300</li>"
+        "<li><strong>Graphics:</strong> NVIDIA GeForce GTX 650 Ti</li>"
+        "<li><strong>Storage:</strong> 30 GB</li>"
+        "</ul>"
+    )
+
+    report = _check(benchmark_db, html=html)
+
+    ram_row = next(row for row in report.components if row.component is ComponentName.RAM)
+    assert ram_row.ratio is None
+    assert ram_row.passed is None
+    assert ram_row.unverified is True
+    assert ram_row.required_value == "not published"
+    assert ram_row.user_value == "16 GB"
+
+    assert report.verdict is not None
+    # The verdict is not UNVERIFIED: the RAM ratio is simply excluded from min.
+    assert report.verdict.band is VerdictBand.PASS
+
+
+def test_metaphor_style_vram_shortfall_yields_poor_verdict_end_to_end(
+    benchmark_db: dict[str, Any],
+) -> None:
+    # Metaphor-style scenario: every other component clears the minimum
+    # comfortably, but the 4 GB user VRAM against the published 6 GB minimum
+    # becomes the bottleneck ratio (4/6 ≈ 0.667 → Poor, ~67%).
+    html = _requirements_html(gpu="NVIDIA GeForce GTX 650 Ti, 6 GB VRAM")
+    spec = _system_spec(vram_gb=4.0)
+
+    report = _check(benchmark_db, html=html, spec=spec)
+
+    vram_row = next(row for row in report.components if row.component is ComponentName.VRAM)
+    assert vram_row.ratio == pytest.approx(4.0 / 6.0)
+    assert vram_row.passed is None
+    assert vram_row.unverified is False
+
+    verdict = report.verdict
+    assert verdict is not None
+    assert verdict.ratio == pytest.approx(4.0 / 6.0)
+    assert verdict.band is VerdictBand.POOR
+    assert verdict.display_percent == pytest.approx(66.0)
+    assert verdict.percentage_text is not None
+    assert "66% of the game's minimum requirement" in verdict.percentage_text
+    assert verdict.spec_shortfall is False
 
 
 def test_requirement_extractor_protocol_matches_parser_output_schema() -> None:
