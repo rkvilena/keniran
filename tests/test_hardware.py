@@ -7,6 +7,7 @@ Windows-independent and never touches the real ``C:`` drive or ``generated/``.
 
 from __future__ import annotations
 
+import inspect
 import json
 import subprocess
 from datetime import UTC, datetime
@@ -15,6 +16,7 @@ from pathlib import Path
 import pytest
 
 from keniran.adapters import hardware
+from keniran.adapters.hardware import windows
 from keniran.core.models import SystemSpec
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -64,13 +66,13 @@ def _install_fake_dxdiag(monkeypatch: pytest.MonkeyPatch, report_text: str) -> l
         calls.append(report_path)
         report_path.write_text(report_text, encoding="utf-8")
 
-    monkeypatch.setattr(hardware, "_run_dxdiag", fake_run)
+    monkeypatch.setattr(windows, "_run_dxdiag", fake_run)
     return calls
 
 
 def _install_fake_disk(monkeypatch: pytest.MonkeyPatch, free_gb: float) -> None:
     """Replace the psutil disk lookup with a fixed free-space value."""
-    monkeypatch.setattr(hardware, "_disk_free_gb", lambda: free_gb)
+    monkeypatch.setattr(windows, "_disk_free_gb", lambda: free_gb)
 
 
 def _completed(returncode: int) -> subprocess.CompletedProcess[str]:
@@ -177,7 +179,7 @@ def test_load_reads_existing_cache_without_reauditing(
     def explode(report_path: Path) -> None:
         raise AssertionError("dxdiag must not run when the cache exists")
 
-    monkeypatch.setattr(hardware, "_run_dxdiag", explode)
+    monkeypatch.setattr(windows, "_run_dxdiag", explode)
 
     assert hardware.load(path=path) == audited
 
@@ -284,7 +286,7 @@ def test_audit_on_non_windows_raises_clear_error(
     def explode(report_path: Path) -> None:
         raise AssertionError("dxdiag must not run on non-Windows platforms")
 
-    monkeypatch.setattr(hardware, "_run_dxdiag", explode)
+    monkeypatch.setattr(windows, "_run_dxdiag", explode)
 
     with pytest.raises(hardware.UnsupportedPlatformError) as excinfo:
         hardware.audit(path=tmp_path / "system_spec.json")
@@ -296,7 +298,7 @@ def test_read_report_decodes_utf16_dxdiag_output(tmp_path: Path) -> None:
     path = tmp_path / "dxdiag.txt"
     path.write_bytes(SAMPLE_TEXT.encode("utf-16"))
 
-    text = hardware._read_report(path)
+    text = windows._read_report(path)
 
     assert "Card name: NVIDIA GeForce RTX 3060" in text
     assert hardware.parse_dxdiag(text).vram_gb == 12.0
@@ -308,31 +310,31 @@ def test_run_dxdiag_missing_executable_raises(
     def missing(*args: object, **kwargs: object) -> object:
         raise FileNotFoundError("dxdiag")
 
-    monkeypatch.setattr(hardware.subprocess, "run", missing)
+    monkeypatch.setattr(windows.subprocess, "run", missing)
 
     with pytest.raises(hardware.DxDiagError) as excinfo:
-        hardware._run_dxdiag(tmp_path / "dxdiag.txt")
+        windows._run_dxdiag(tmp_path / "dxdiag.txt")
 
     assert "not found" in str(excinfo.value)
 
 
 def test_run_dxdiag_nonzero_exit_raises(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    monkeypatch.setattr(hardware.subprocess, "run", lambda *args, **kwargs: _completed(1))
+    monkeypatch.setattr(windows.subprocess, "run", lambda *args, **kwargs: _completed(1))
 
     with pytest.raises(hardware.DxDiagError) as excinfo:
-        hardware._run_dxdiag(tmp_path / "dxdiag.txt")
+        windows._run_dxdiag(tmp_path / "dxdiag.txt")
 
     assert "code 1" in str(excinfo.value)
 
 
 def test_run_dxdiag_timeout_raises(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     def timeout(*args: object, **kwargs: object) -> object:
-        raise subprocess.TimeoutExpired(cmd="dxdiag", timeout=hardware.DXDIAG_TIMEOUT_SECONDS)
+        raise subprocess.TimeoutExpired(cmd="dxdiag", timeout=windows.DXDIAG_TIMEOUT_SECONDS)
 
-    monkeypatch.setattr(hardware.subprocess, "run", timeout)
+    monkeypatch.setattr(windows.subprocess, "run", timeout)
 
     with pytest.raises(hardware.DxDiagError) as excinfo:
-        hardware._run_dxdiag(tmp_path / "dxdiag.txt")
+        windows._run_dxdiag(tmp_path / "dxdiag.txt")
 
     assert "did not finish" in str(excinfo.value)
 
@@ -340,10 +342,86 @@ def test_run_dxdiag_timeout_raises(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
 def test_run_dxdiag_without_output_file_raises(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    monkeypatch.setattr(hardware.subprocess, "run", lambda *args, **kwargs: _completed(0))
-    monkeypatch.setattr(hardware, "DXDIAG_OUTPUT_WAIT_SECONDS", 0.0)
+    monkeypatch.setattr(windows.subprocess, "run", lambda *args, **kwargs: _completed(0))
+    monkeypatch.setattr(windows, "DXDIAG_OUTPUT_WAIT_SECONDS", 0.0)
 
     with pytest.raises(hardware.DxDiagError) as excinfo:
-        hardware._run_dxdiag(tmp_path / "dxdiag.txt")
+        windows._run_dxdiag(tmp_path / "dxdiag.txt")
 
     assert "did not write" in str(excinfo.value)
+
+
+def test_facade_reexports_backend_errors_and_types() -> None:
+    assert hardware.HardwareAuditError is windows.HardwareAuditError
+    assert hardware.UnsupportedPlatformError is windows.UnsupportedPlatformError
+    assert hardware.DxDiagError is windows.DxDiagError
+    assert hardware.DxDiagParseError is windows.DxDiagParseError
+    assert hardware.HardwareCacheError is windows.HardwareCacheError
+    assert hardware.DxDiagInfo is windows.DxDiagInfo
+
+
+def test_facade_functions_keep_backend_signatures() -> None:
+    for name in ("audit", "load", "save", "parse_dxdiag"):
+        assert inspect.signature(getattr(hardware, name)) == inspect.signature(
+            getattr(windows, name)
+        )
+
+
+def test_facade_audit_dispatches_to_windows_backend(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    expected = OLD_SPEC
+    calls: list[Path] = []
+
+    def fake_audit(*, path: Path) -> SystemSpec:
+        calls.append(path)
+        return expected
+
+    monkeypatch.setattr(hardware.sys, "platform", "win32")
+    monkeypatch.setattr(windows, "audit", fake_audit)
+    path = tmp_path / "generated" / "system_spec.json"
+
+    assert hardware.audit(path=path) == expected
+    assert calls == [path]
+
+
+def test_facade_audit_does_not_dispatch_on_unsupported_platform(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def explode(*, path: Path) -> SystemSpec:
+        raise AssertionError("the Windows backend must not run on non-Windows")
+
+    monkeypatch.setattr(hardware.sys, "platform", "linux")
+    monkeypatch.setattr(windows, "audit", explode)
+
+    with pytest.raises(hardware.UnsupportedPlatformError):
+        hardware.audit()
+
+
+def test_old_hardware_module_file_is_gone() -> None:
+    package_dir = Path(hardware.__file__).resolve().parent
+
+    assert package_dir.name == "hardware"
+    assert (package_dir / "__init__.py").is_file()
+    assert (package_dir / "windows.py").is_file()
+    assert not (package_dir.parent / "hardware.py").exists()
+
+
+def test_save_and_parse_stay_platform_independent(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(hardware.sys, "platform", "linux")
+    path = tmp_path / "generated" / "system_spec.json"
+
+    assert hardware.save(OLD_SPEC, path=path) == path
+    assert hardware.load(path=path) == OLD_SPEC
+    assert hardware.parse_dxdiag(SAMPLE_TEXT).vram_gb == 12.0
+
+
+def test_load_without_cache_on_non_windows_raises(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(hardware.sys, "platform", "linux")
+
+    with pytest.raises(hardware.UnsupportedPlatformError):
+        hardware.load(path=tmp_path / "generated" / "system_spec.json")
