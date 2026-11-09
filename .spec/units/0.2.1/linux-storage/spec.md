@@ -10,7 +10,7 @@ denylist and same-device dedupe — so tmpfs/squashfs noise can never fake a sto
 The Linux audit also starts recording `storage_used_mount` provenance, which STO-001
 added to the model but the Linux audit never populated.
 
-Design (agreed in interview 2026-11-08):
+Design (agreed 2026-11-08):
 - **Reuse, don't touch the helper.** `storage.py` stays pure and backend-agnostic
   (STO-001 contract frozen). All Linux-specific filtering happens in the Linux
   gatherer, mirroring how `windows.py::_collect_partitions()` prepares partitions.

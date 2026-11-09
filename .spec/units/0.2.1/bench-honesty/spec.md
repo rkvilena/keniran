@@ -11,7 +11,7 @@ never named. Add a **name-quality floor at lookup entry**: placeholder-shaped na
 are classified model-less *before* any matching and degrade to `matched_by="unverified"`
 — reusing the existing honesty path end-to-end, with zero scoring changes.
 
-Design (agreed in interview 2026-11-08):
+Design (agreed 2026-11-08):
 - **Gate lives in `benchmarks.lookup`, not scoring.** Placeholder names never reach
   Stage 1/2, so no score is ever released for them. `_match_score()` and the ratio
   pipeline stay untouched.

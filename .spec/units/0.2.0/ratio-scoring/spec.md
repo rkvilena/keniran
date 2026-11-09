@@ -4,7 +4,7 @@ task-prefix: SCO
 ## Goal
 
 Convert the verdict math so RAM and VRAM become scored ratios instead of hard
-pass/fail caps. Rationale settled in interview: proportional leniency beats a fixed
+pass/fail caps. Rationale settled in design discussion: proportional leniency beats a fixed
 1 GB margin (15.5/16 GB RAM → ~97% Borderline; 4/6 GB VRAM → ~67% Poor) and shortfalls
 degrade the report honestly instead of flipping a cliff at Fail.
 

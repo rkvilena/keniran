@@ -4,91 +4,67 @@
 
 `keniran <APP_ID>` audits the local machine, fetches a Steam game's minimum PC
 requirements, and prints a per-component comparison with a bottom-line verdict.
-Use `--refresh-spec` to force a fresh hardware audit; the audited spec is cached
-in `generated/system_spec.json`.
 
-This README documents **0.2.1**. (0.2.0 shipped the platform split and ratio
-scoring; 0.2.1 adds the Linux any-mount storage parity and the placeholder-name
-honesty gate for benchmark lookup.)
+## Install
 
-## Linux support (0.2.0)
+Requires Python 3.11 (the project is pinned to it).
 
-keniran runs on POSIX hosts — native Linux and WSL2 (`sys.platform == "linux"`).
-The hardware adapter is platform-dispatched: `win32` uses the dxdiag backend,
-anything else runs the Linux audit. Running the Linux audit on a non-POSIX host
-raises `UnsupportedPlatformError` up front rather than half-probing.
+From a clone:
 
-### Fact chains
+```bash
+git clone https://github.com/rkvilena/keniran
+cd keniran
+pip install .
+```
 
-Each hardware fact comes from a fallback chain. A missing tool, a non-zero
-exit, or malformed output degrades only that one field:
+This installs the `keniran` command. No virtualenv needed unless you're
+developing — see [Developing](#developing) below.
 
-| Fact     | Chain                                    |
-| -------- | ---------------------------------------- |
-| CPU      | `/proc/cpuinfo` → `lscpu`                |
-| RAM      | `/proc/meminfo` → `psutil`               |
-| GPU name | `lspci -mm` → `nvidia-smi`               |
-| VRAM     | `nvidia-smi` → `vulkaninfo` → `None`     |
+## Usage
 
-### Honest fallbacks
+```bash
+keniran <APP_ID>
+```
 
-- **VRAM degrades gracefully.** When both VRAM rungs fail, the audit
-  persists `vram_gb = None` and the report marks the VRAM row `unverified ⚠`
-  instead of guessing.
-- **A fully broken GPU chain fails loudly.** `gpu_name` is a required field, so
-  the audit surfaces a pydantic `ValidationError` — never a silently
-  half-populated spec.
-- **An empty audit raises `LinuxAuditError`.** If neither CPU nor RAM can be
-  determined, no spec is written.
-- **Placeholder-shaped names are never scored.** When `lspci` runs without the
-  pciutils ID database, unknown devices surface as placeholder names like
-  `Device 008e`. Placeholder-shaped names are rejected before benchmark
-  matching, so that component shows `unverified ⚠` instead of fuzzy-matching a
-  confident pass.
-- Tool absence itself never raises a hardware error; each field degrades
-  independently, and a spec degraded only in VRAM still caches and scores with
-  what it could verify.
+`APP_ID` is the Steam appid (the number in a store page URL, e.g.
+`keniran 1091500`). The first run audits your hardware and caches it in
+`generated/system_spec.json`; later runs reuse the cache. Pass
+`--refresh-spec` to force a fresh audit.
 
-### WSL ≠ native Linux
+## Reading the report
 
-A smoke test inside WSL is **not** native validation proof. WSL2 reports
-`sys.platform == "linux"` too, so a spec audited inside WSL is cached as
-`platform="linux"` and would be reused by a native Linux run of the same
-version — treat a WSL-audited spec as a WSL spec:
+Each component is compared by ratio (yours ÷ required); the verdict is the
+worst verified component. A row marked `unverified ⚠` means keniran couldn't
+confirm that value and it's excluded from the verdict — keniran never guesses.
 
-- WSL2 exposes the GPU through the paravirtualized `/dev/dxg` device, so
-  `lspci` sees no discrete card and `nvidia-smi` works only with the WSL driver
-  stack.
-- `.wslconfig` can cap guest RAM, making `/proc/meminfo` under-report the
-  physical machine.
+## Requirements & limitations
 
-The Linux audit is validated against WSL-recorded fixtures; native-Linux
-validation of the GPU chain and the storage gatherer remains an accepted open
-item (the WSL smoke covers plumbing only).
+- Runs on Windows and POSIX hosts (native Linux and WSL2).
+- Compares against Steam's **minimum** requirements only; recommended
+  requirements are out of scope.
+- Hardware facts come from fallback chains per platform. When a value can't
+  be verified (e.g. VRAM on some Linux setups), the row degrades to
+  `unverified ⚠` rather than fabricating a number. Details:
+  [`.spec/spec.md`](.spec/spec.md).
 
-### Storage
+## Developing
 
-The storage rule checks **any local fixed mount**: the eligible mount with the
-most free space is measured, and removable / CD-ROM / network mounts are
-excluded — the shared helper records which kinds it skipped rather than
-dropping them silently. Both audits use the same helper, so the rule is
-identical on Windows and Linux.
+```bash
+python3.11 -m venv .venv
+.venv/bin/pip install -e ".[dev]"    # on Windows: .venv\Scripts\pip
+```
 
-On Linux, the audit applies its own mount hygiene before the helper sees the
-list: pseudo-filesystems (`tmpfs`, `ramfs`, `devtmpfs`, `proc`, `sysfs`,
-`efivarfs`, `squashfs`, `overlay`) are denylisted — `tmpfs` free space is just
-spare RAM, and `squashfs` is read-only snap content — while same-device mounts
-(merged-usr, bind setups) are collapsed to the mountpoint with the most free
-space. Root `/` is a guaranteed candidate, not the only one.
+The editable install points the `keniran` command at your live source tree.
+The venv is a contributor-only artifact; end users never need it. On WSL, a
+separate `.venv-wsl/` may exist because the distro's system Python is older
+than the 3.11 pin requires.
 
-When no eligible mount can be measured, the storage row is `unverified ⚠`,
-never a fabricated `0.0`; when one is chosen, the row shows the mount it
-measured as `<free> GB (<mount>)`.
+Project engineering — architecture, decision log, per-release specs — lives
+in [`.spec/`](.spec/):
 
-### Scoring semantics (0.2.0)
-
-- RAM and VRAM are **scored ratios** (`user / required`) that join the CPU/GPU
-  benchmark ratios; the final verdict is the `min()` of the verified ratios, so
-  an unverified component contributes nothing rather than zeroing the verdict.
-- Storage stays a **binary hard check**: a free-space shortfall is the only
-  thing that caps the verdict at Fail.
+- [`.spec/spec.md`](.spec/spec.md) — the project blueprint: goal, architecture,
+  data contracts, and what's explicitly out of scope.
+- [`.spec/decisions.md`](.spec/decisions.md) — an append-only decision log with
+  the rationale and rejected alternatives behind each release.
+- [`.spec/units/`](.spec/units/) — per-release unit specs, task lists, and
+  working context.
