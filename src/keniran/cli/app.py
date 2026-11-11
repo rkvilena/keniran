@@ -23,6 +23,7 @@ UNVERIFIED_NOTE: Final = "unverified — manual review suggested"
 ST_WARNING_NOTE: Final = (
     "⚠ Warning: Single-thread performance is below 70% of the required CPU score."
 )
+TUI_COMMAND: Final = "tui"
 
 _console: Final = Console()
 
@@ -45,6 +46,20 @@ def _fail(message: str) -> NoReturn:
     """Report a CLI-level failure on stderr and exit with a nonzero status."""
     typer.echo(f"Error: {message}", err=True)
     raise typer.Exit(code=1)
+
+
+def _launch_tui() -> None:
+    """Launch the Textual TUI.
+
+    Imported lazily so the one-shot CLI does not pay for importing textual.
+    Keeping ``tui`` as a reserved positional value (instead of registering a
+    second typer command) preserves the single-command shape of the app:
+    ``keniran <APP_ID>``, ``keniran tui``, and bare ``keniran`` help all keep
+    working without a command-group indirection.
+    """
+    from keniran.tui.app import run_tui
+
+    run_tui()
 
 
 def _parse_app_id(raw: str) -> int:
@@ -149,6 +164,9 @@ def main(
     ),
 ) -> None:
     """Check whether this machine can run a Steam game."""
+    if app_id.strip().lower() == TUI_COMMAND:
+        _launch_tui()
+        return
     numeric_app_id = _parse_app_id(app_id)
     try:
         report = check_game(numeric_app_id, refresh_spec=refresh_spec)
