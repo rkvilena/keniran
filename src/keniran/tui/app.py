@@ -9,6 +9,11 @@ The pipeline runs in a Textual *thread* worker so the UI stays responsive
 while Steam and the hardware audit are in flight. The report itself is mounted
 from :func:`keniran.rendering.report_view.report_renderables`, the same ordered
 renderables the CLI prints.
+
+Failure paths are honest and non-fatal, mirroring the CLI's ``_fail`` helper:
+invalid app ids and worker errors (Steam adapter failures or unexpected
+exceptions) are mounted as styled inline messages, the Run button is
+re-enabled, and the next check can run in the same session.
 """
 
 from __future__ import annotations
@@ -17,6 +22,7 @@ from collections.abc import Callable
 from functools import partial
 from typing import Final
 
+from rich.text import Text
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal
 from textual.widgets import Button, Footer, Header, Input, Static
@@ -31,6 +37,8 @@ APP_ID_INPUT_ID: Final = "app-id-input"
 RUN_BUTTON_ID: Final = "run-button"
 STATUS_ID: Final = "check-status"
 RESULTS_ID: Final = "results"
+ERROR_ID: Final = "check-error"
+ERROR_STYLE: Final = "bold red"
 
 
 class KeniranTui(App[None]):
@@ -93,44 +101,59 @@ class KeniranTui(App[None]):
         yield Container(id=RESULTS_ID)
         yield Footer()
 
-    def on_button_pressed(self, event: Button.Pressed) -> None:
+    async def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle the Run button."""
         if event.button.id != RUN_BUTTON_ID:
             return
-        self._request_check()
+        await self._request_check()
 
-    def on_worker_state_changed(self, event: Worker.StateChanged) -> None:
-        """Replace the status line with the report once the worker succeeds."""
+    async def on_worker_state_changed(self, event: Worker.StateChanged) -> None:
+        """Replace the status line with the report or a styled inline error."""
         if event.worker is not self._check_worker:
             return
         if event.state is WorkerState.SUCCESS:
             report = event.worker.result
             self._check_worker = None
             if report is not None:
-                self._show_report(report)
+                await self._show_report(report)
             else:
                 self._set_running(False)
-                self._clear_results()
-        elif event.state in (WorkerState.ERROR, WorkerState.CANCELLED):
+                await self._clear_results()
+        elif event.state is WorkerState.ERROR:
+            error = event.worker.error
             self._check_worker = None
             self._set_running(False)
-            self._clear_results()
+            if isinstance(error, steam.SteamAdapterError):
+                await self._show_error(str(error))
+            else:
+                await self._show_error(f"Unexpected error: {error}")
+        elif event.state is WorkerState.CANCELLED:
+            self._check_worker = None
+            self._set_running(False)
+            await self._clear_results()
 
-    def _request_check(self) -> None:
+    async def _request_check(self) -> None:
         """Start one pipeline run for the app id in the input.
 
-        A second request while a check is in flight is ignored: the Run button
-        stays disabled for the whole run (the pinned behaviour in the pilot
-        tests) and the worker guard covers programmatic calls.
+        An invalid app id never starts a worker: the inline validation message
+        (the TUI counterpart of the CLI's ``_fail``) replaces the results
+        instead. A second request while a check is in flight is ignored: the
+        Run button stays disabled for the whole run (the pinned behaviour in
+        the pilot tests) and the worker guard covers programmatic calls.
         """
-        raw = self.query_one(f"#{APP_ID_INPUT_ID}", Input).value.strip()
-        if not raw.isdigit() or int(raw) <= 0:
+        entered = self.query_one(f"#{APP_ID_INPUT_ID}", Input).value
+        raw = entered.strip()
+        try:
+            app_id = int(raw)
+        except ValueError:
+            app_id = 0
+        if not raw.isdigit() or app_id <= 0:
+            await self._show_error(f"Invalid APP_ID {entered!r}: expected a numeric Steam app id.")
             return
         if self._check_worker is not None and not self._check_worker.is_finished:
             return
 
-        app_id = int(raw)
-        self._show_status(app_id)
+        await self._show_status(app_id)
         self._set_running(True)
         self._check_worker = self.run_worker(
             partial(self._run_check, app_id),
@@ -138,6 +161,7 @@ class KeniranTui(App[None]):
             description=f"Checking Steam app {app_id}",
             thread=True,
             exclusive=True,
+            exit_on_error=False,
         )
 
     def _run_check(self, app_id: int) -> Report:
@@ -150,24 +174,31 @@ class KeniranTui(App[None]):
             gpu_db=self._gpu_db,
         )
 
-    def _show_status(self, app_id: int) -> None:
+    async def _show_status(self, app_id: int) -> None:
         """Mount the running status line naming the requested app id."""
-        self._clear_results()
+        await self._clear_results()
         self.query_one(f"#{RESULTS_ID}", Container).mount(
             Static(f"Checking Steam app {app_id}…", id=STATUS_ID)
         )
 
-    def _show_report(self, report: Report) -> None:
+    async def _show_error(self, message: str) -> None:
+        """Mount one styled inline error (the TUI's counterpart of ``_fail``)."""
+        await self._clear_results()
+        self.query_one(f"#{RESULTS_ID}", Container).mount(
+            Static(Text(f"Error: {message}", style=ERROR_STYLE), id=ERROR_ID)
+        )
+
+    async def _show_report(self, report: Report) -> None:
         """Replace the status line with the shared report renderables."""
-        self._clear_results()
+        await self._clear_results()
         self.query_one(f"#{RESULTS_ID}", Container).mount(
             *(Static(renderable) for renderable in report_renderables(report))
         )
         self._set_running(False)
 
-    def _clear_results(self) -> None:
+    async def _clear_results(self) -> None:
         """Remove everything currently mounted in the results area."""
-        self.query_one(f"#{RESULTS_ID}", Container).remove_children()
+        await self.query_one(f"#{RESULTS_ID}", Container).remove_children()
 
     def _set_running(self, running: bool) -> None:
         """Enable or disable the Run button for the duration of a check."""
