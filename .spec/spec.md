@@ -3,6 +3,11 @@
 > Canonical input plans: `plan/decisions.md` (BINDING when versioned), `plan/detailed-flow.md`,
 > `plan/benchmark-db.md`. This file describes the codebase as of **0.1.0**; per-version
 > deltas live in `units/<release-id>/spec.md`.
+>
+> Versioning note (2026-11-11): the 0.1.0–0.2.1 era was private development; public
+> releases start at **v1.0.0** (repo goes public + first GitHub release with the UI).
+> A release unit's id may lead the `[project] version` in `pyproject.toml` until its
+> version-bump chore lands — pyproject remains the single source of truth.
 
 ## 1. Goal & Scope
 
@@ -51,10 +56,19 @@ tests/                         # pytest + recorded fixtures; no network
 Swap contract: `services/` consumes adapters and returns plain dataclasses; the CLI (and
 any future UI) is just a renderer of the same `Report`.
 
-**Planned 0.2.0 shape** (delta lives in `units/0.2.0/`, units: model-layout,
+**Planned 0.2.0 shape** (landed in 0.2.0; delta lives in `units/0.2.0/`, units: model-layout,
 linux-audit, ratio-scoring, storage-mounts, release): `adapters/hardware.py`
 becomes a package — `__init__.py` facade (unchanged `audit`/`load`/`save` signatures) + 
 `windows.py` + `linux.py`, dispatched on `sys.platform`.
+
+**Planned v1.0.0 shape** (in progress; delta lives in `units/v1.0.0/tui/`, prefix
+TUI): new `tui/` package — Textual app launched as `keniran tui`, the second
+renderer of `Report` (one-shot CLI unchanged and default); new `rendering/` package —
+shared pure Report → rich-renderables functions extracted from `cli/app.py`, consumed
+by both renderers; new exact-pinned dependency `textual`. `--search` stays deferred
+(natural future home: a TUI `Input` widget). Blocking pipeline work runs in a
+Textual worker thread; TUI tests are headless pilot tests with fake fetchers via the
+existing `check_game` seams.
 
 ## 4. Data Contracts
 
@@ -86,7 +100,7 @@ plus `unverified: set[ComponentName]` for generic descriptions with no model num
 | Recommended-requirements comparison | post-0.2.0 backlog |
 | Refined CPU scoring (ST-weighted composite) | post-0.2.0 backlog; candidate after Linux audit |
 | Steam-library mount detection (`libraryfolders.vdf`) | post-0.2.0 backlog (follows storage rework) |
-| UI (TUI/web) | renderer over the same `Report` |
+| UI (TUI/web) | **in progress as v1.0.0** (`units/v1.0.0/tui/`): Textual TUI via `keniran tui`, second renderer of `Report`; search box still deferred — natural home is a TUI `Input` widget |
 | Native-Linux hardware validation | deferred until real-Linux CI exists (WSL smoke covers plumbing only) |
 
 ## 6. Open Questions

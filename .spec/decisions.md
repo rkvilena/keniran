@@ -5,6 +5,57 @@ Append-only. Newest first within each release block. Every entry inherits the ru
 
 ---
 
+## Release v1.0.0 (planned; decided 2026-11-11)
+
+- **Versioning rationale locked**: v1.0.0 = the first **public** release — the repo
+  goes public and gets its first GitHub release when the UI lands; the 0.1.0–0.2.1
+  era was private development and does not count toward public version history.
+  pyproject `[project] version` target **confirmed as `1.0.0`** (resolves the
+  release unit's Open Question). From 1.0.0 on, semver applies: the CLI contract
+  (`keniran <APP_ID>`) and report semantics are the stability promise; breaking
+  changes require a major bump. (source: user decision 2026-11-11)
+- **Global spec patched at user request (2026-11-11, pre-implementation)**: §3
+  gained a "Planned v1.0.0 shape" note (new `tui/` + `rendering/` packages,
+  `textual` dep, `keniran tui` entry point, search still deferred); §5 backlog row
+  "UI (TUI/web)" marked **in progress as v1.0.0**; header notes the public-release
+  versioning convention. REL10-002's doc sweep must not contradict it.
+  (source: user request 2026-11-11)
+- Release id **v1.0.0** = the UI backlog item made real; feature unit
+  `v1.0.0/tui` (prefix `TUI`), release chores prefix `REL10`. The release id
+  deliberately leads the pyproject number (currently `0.2.1`) until the REL10-001
+  bump lands, per the discussed cadence. (source: user decision 2026-11-11)
+- **UI stack = Textual TUI**, chosen over four alternatives by weight + identity +
+  ecosystem: tkinter rejected (dated look, theming pain, zero design headroom),
+  PyQt6/PySide6 rejected (~60–150MB Qt runtime for a pip utility — violates the
+  lightweight-first priority), static-HTML report rejected for this release (lightest
+  of all, but cannot ever host a search box due to `file://` CORS — user preferred an
+  interactive direction), local web server rejected (heaviest scope: server lifecycle,
+  CORS, more deps). Textual: pure Python, terminal-native (fits the tool's CLI
+  identity; works under WSL/SSH), same author as Rich so existing rich renderables
+  embed directly, MIT, and `textual serve` later gives a browser UI with zero
+  rewrite — the "web-UI era" door stays open. (source: user decision 2026-11-11,
+  blueprint analysis same day)
+- **`--search` stays deferred** through v1.0.0 (user confirmed), despite the backlog
+  naming the "UI era" as its trigger — the TUI becomes its natural one-widget home
+  later. (source: user decision 2026-11-11)
+- **Entry point `keniran tui`; one-shot CLI unchanged and default.** Pinned pitfall:
+  adding a second Typer command converts the single-command app into a group,
+  breaking `keniran <APP_ID>`; dispatch must preserve `keniran <APP_ID>` (one-shot),
+  `keniran tui` (TUI), bare `keniran` (help) — pinned by tests in TUI-001.
+  (source: user interview 2026-11-11, blueprint flag)
+- **Theme `tokyo-night` default, explicitly non-binding**: themes are
+  runtime-swappable via Textual's command palette; a custom "keniran" verdict-colored
+  theme and `--theme` persistence are backlog. User explicitly asked for
+  reversibility before committing. (source: user decision 2026-11-11)
+- **New dependency: `textual`** (exact-pinned to newest stable at TUI-001 time, per
+  the repo's fixed-pin convention). No other dep changes. (source: blueprint,
+  user-approved stack 2026-11-11)
+- **Shared renderer extraction**: `keniran.rendering.report_view` (pure
+  Report → rich-renderables functions) replaces the private helpers in
+  `cli/app.py`; both CLI and TUI consume it. Keeps the "UIs are renderers of
+  Report" contract from duplicating presentation logic across renderers.
+  (source: blueprint design, consistent with plan/decisions.md §3)
+
 ## Release 0.2.1 (decided 2026-11-08)
 
 - A new patch release **0.2.1** carries the Linux any-local-mount storage follow-up;
