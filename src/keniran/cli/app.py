@@ -91,8 +91,9 @@ def render_report(report: Report, console: Console | None = None) -> None:
 
 @app.command(name="keniran")
 def main(
-    app_id: str = typer.Argument(
-        ...,
+    ctx: typer.Context,
+    app_id: str | None = typer.Argument(
+        None,
         help="Steam app id of the game to check.",
     ),
     refresh_spec: bool = typer.Option(
@@ -109,6 +110,13 @@ def main(
     ),
 ) -> None:
     """Check whether this machine can run a Steam game."""
+    if app_id is None:
+        # Typer's ``no_args_is_help`` only reaches ``TyperGroup.parse_args``;
+        # the single-command app falls through to Click's ``MissingArgument``.
+        # Making the argument optional and echoing the command help here keeps
+        # bare ``keniran`` identical to ``keniran --help`` (exit 0).
+        typer.echo(ctx.get_help())
+        raise typer.Exit()
     if app_id.strip().lower() == TUI_COMMAND:
         _launch_tui()
         return

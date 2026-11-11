@@ -11,9 +11,13 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import os
+import subprocess
+import sys
 import threading
 from collections.abc import Callable, Coroutine
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -594,20 +598,42 @@ def test_cli_tui_launches_the_tui_app(monkeypatch: pytest.MonkeyPatch) -> None:
     assert launched == ["tui"]
 
 
-def test_cli_bare_invocation_prints_help(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    calls: list[int] = []
+# The typer app is the console entry point; ``prog_name`` keeps the usage line
+# reading ``keniran`` when the command is launched via ``python -c``.
+_CONSOLE_PROGRAM = "from keniran.cli.app import app; app(prog_name='keniran')"
 
-    def fake_check_game(app_id: int, refresh_spec: bool = False) -> Report:
-        calls.append(app_id)
-        return Report(game_name="unused", app_id=app_id)
 
-    monkeypatch.setattr(cli_app, "check_game", fake_check_game)
+def _run_console(*args: str) -> subprocess.CompletedProcess[str]:
+    """Run the real CLI entry point in a fresh interpreter (no CliRunner).
 
-    result = CliRunner().invoke(cli, [])
+    ``CliRunner`` swaps streams in-process; a subprocess reaches the installed
+    script's ``standalone_mode`` path end to end, so the assertions cover the
+    behavior a user actually sees at the console.
+    """
+    env = os.environ.copy()
+    source_path = str(Path(__file__).resolve().parents[1] / "src")
+    existing = env.get("PYTHONPATH")
+    env["PYTHONPATH"] = os.pathsep.join([source_path, existing]) if existing else source_path
+    return subprocess.run(
+        [sys.executable, "-c", _CONSOLE_PROGRAM, *args],
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=60,
+    )
 
-    assert result.exit_code == 2
-    assert "Usage:" in result.output
-    assert "app_id" in result.output
-    assert calls == []
+
+def test_cli_bare_invocation_prints_help_on_the_real_console() -> None:
+    bare = _run_console()
+
+    assert bare.returncode == 0, bare.stderr
+    assert bare.stderr == ""
+    assert "Usage:" in bare.stdout
+    assert "app_id" in bare.stdout
+    assert "--refresh-spec" in bare.stdout
+    assert "Missing argument" not in bare.stdout
+
+    # Bare ``keniran`` must render exactly the help ``keniran --help`` shows.
+    explicit_help = _run_console("--help")
+    assert explicit_help.returncode == 0, explicit_help.stderr
+    assert bare.stdout == explicit_help.stdout
