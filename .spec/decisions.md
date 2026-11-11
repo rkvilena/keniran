@@ -185,3 +185,27 @@ Append-only. Newest first within each release block. Every entry inherits the ru
   failure report exists; candidate rungs (eglinfo/glxinfo, /sys/class/drm) are
   design detail for a future unit spec. (source: user decision 2026-11-08,
   "way later is acceptable")
+
+## Post-v1.0.0 backlog — user test findings (added 2026-11-11)
+
+- **TUI design pass** (next release's feature): v1.0.0 TUI is functional but
+  "not clean enough design-wise" — user brings design references (2026-11-12).
+  Scope: styling/UX polish of `src/keniran/tui/app.py` (CSS, layout); no
+  pipeline/rendering changes. Ship as its own release or fold into the patch
+  below — decide when the references land. (source: user testing 2026-11-11)
+- **FC27 false-negative bug (correctness; priority over design):**
+  `keniran 4080220` printed `84% / Poor` where truth is ~148% → capped 100% Pass.
+  Traced offline: (1) `requirements_parser` keeps the whole OR string as one
+  `gpu_name` (`"AMD RX 570 or Nvidia GTX 1050 Ti"` → fuzzy best_guess
+  `'NVIDIA A40'` @0.75, score 13,900); user GPU 11,718 ÷ 13,900 = 0.843.
+  Root fixes: split `Processor:`/`Graphics:` values on " or " into candidates and
+  score against the least demanding candidate that resolves (meet-any semantics);
+  vendor-alias normalization before fuzzy scoring (`nvidia`↔`geforce`,
+  `amd`↔`radeon` — `"Nvidia GTX 1050 Ti"` vs DB `"GeForce GTX 1050 Ti"` scores
+  0.759, below the 0.80 gate). Cyberpunk 1091500 worked by luck (whole-string
+  match hit `'GeForce GTX 1060'` @1.0). Parked policy question: should a
+  below-gate best_guess requirement carry its uncertainty into the verdict line?
+  (tweaks 0.2.1's "best_guess stays scorable" decision — user's call). The LLM
+  parsing adapter's trigger ("rules-parser accuracy proves poor") technically
+  fired, but these rules-level fixes are cheaper; LLM stays backlog.
+  (source: user test 2026-11-11 + blueprint offline reproduction)

@@ -1,6 +1,10 @@
 # Tasks — v1.0.0/tui
 
-- [ ] TUI-001: Scaffold TUI — textual dep, `keniran tui` subcommand, minimal App shell
+- [x] TUI-005: bare `keniran` prints help on the real console (REL10-003 RESOLVE)
+  status: done (commit c76e650)
+
+- [x] TUI-001: Scaffold TUI — textual dep, `keniran tui` subcommand, minimal App shell
+  status: done (commit 0cb0685)
   depends: -
   files: pyproject.toml, src/keniran/tui/__init__.py, src/keniran/tui/app.py,
     src/keniran/cli/app.py, tests/test_tui.py
@@ -24,7 +28,8 @@
     (TUI-002), error-path polish (TUI-004), search box, history, theme persistence,
     `--refresh-spec` control
 
-- [ ] TUI-002: Extract shared Report renderer — `keniran.rendering.report_view`
+- [x] TUI-002: Extract shared Report renderer — `keniran.rendering.report_view`
+  status: done (commit 8ed3ff8)
   depends: TUI-001
   files: src/keniran/rendering/__init__.py, src/keniran/rendering/report_view.py,
     src/keniran/cli/app.py, tests/test_report_view.py
@@ -48,7 +53,8 @@
   out-of-scope: any TUI change (this task is CLI-internal refactor only), Report
     model changes, scoring changes
 
-- [ ] TUI-003: Run the pipeline in a worker and display the verdict
+- [x] TUI-003: Run the pipeline in a worker and display the verdict
+  status: done (commit ac3645a)
   depends: TUI-001, TUI-002
   files: src/keniran/tui/app.py, tests/test_tui.py
   pattern: check_game() injection seams (fetch_steam/load_spec/cpu_db/gpu_db kwargs)
@@ -75,7 +81,8 @@
     search box, refresh-spec toggle, caching Reports between checks beyond
     check_game's own in-memory steam cache
 
-- [ ] TUI-004: Failure paths — honest errors, no crashes
+- [x] TUI-004: Failure paths — honest errors, no crashes
+  status: done (commit 5b8003e)
   depends: TUI-003
   files: src/keniran/tui/app.py, tests/test_tui.py
   pattern: cli/app.py `_fail` + `render_report` message-only path; the

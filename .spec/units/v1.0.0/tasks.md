@@ -1,6 +1,7 @@
 # Tasks — v1.0.0 (release chores)
 
-- [ ] REL10-001: Version bump to 1.0.0
+- [x] REL10-001: Version bump to 1.0.0
+  status: done (commit 754313f)
   depends: -
   gated: v1.0.0/tui
   files: pyproject.toml
@@ -13,7 +14,9 @@
   out-of-scope: changelog file creation (doc sweep is REL10-002);
     plan/decisions.md (also REL10-002)
 
-- [ ] REL10-002: Docs sweep — README + plan/decisions.md
+- [x] REL10-002: Docs sweep — README + plan/decisions.md
+  status: done (commit dee3cc2 — README.md tracked; plan/decisions.md updated on
+  disk only, gitignored by design)
   depends: -
   gated: v1.0.0/tui
   files: README.md, plan/decisions.md
@@ -39,7 +42,10 @@
     detailed-flow.md / benchmark-db.md (surgical fixes only if a revision
     reveals a contradiction)
 
-- [ ] REL10-003: Full acceptance gate run for v1.0.0
+- [x] REL10-003: Full acceptance gate run for v1.0.0
+  status: done (no commit — verification chore; run log 2026-11-11, two passes:
+  first pass found the bare-`keniran` no-args console failure → RESOLVE loop-back
+  fixed as TUI-005 (commit c76e650); re-run all green)
   depends: -
   gated: v1.0.0/tui
   files: (none — verification only)
