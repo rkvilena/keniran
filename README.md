@@ -5,6 +5,9 @@
 `keniran <APP_ID>` audits the local machine, fetches a Steam game's minimum PC
 requirements, and prints a per-component comparison with a bottom-line verdict.
 
+This README documents **1.0.0**. (1.0.0 adds the Textual TUI via `keniran tui`;
+the one-shot CLI is unchanged.)
+
 ## Install
 
 Requires Python 3.11 (the project is pinned to it).
@@ -30,6 +33,36 @@ keniran <APP_ID>
 `keniran 1091500`). The first run audits your hardware and caches it in
 `generated/system_spec.json`; later runs reuse the cache. Pass
 `--refresh-spec` to force a fresh audit.
+
+## TUI (1.0.0)
+
+`keniran tui` launches a terminal UI that renders the same `Report` as the
+one-shot CLI. `keniran <APP_ID>` is unchanged and remains the default — the TUI
+is an alternative front end, not a replacement.
+
+Type a Steam App ID and press **Run**. The check runs in a background worker, so
+the UI stays responsive; while it runs, a status line names the app id, then the
+results area shows:
+
+- the per-component verdict table (required vs your system, result, notes);
+- `unverified ⚠` rows, which are excluded from the verdict rather than guessed;
+- `⚡` best-guess badges with the match confidence for fuzzy-matched names;
+- the single-thread CPU warning when multi-thread performance passes but ST is
+  below ~70%;
+- the bold verdict percentage at the bottom (or the graceful "No PC
+  requirements published" message when a game has none).
+
+Errors — an invalid App ID, a Steam lookup failure, or an unexpected exception —
+are shown inline in bold red instead of crashing the app; fix the input and
+press Run again in the same session.
+
+The default theme is `tokyo-night`. Themes are runtime-swappable through
+Textual's command palette: press `Ctrl+P`, then choose **Theme** (or type a
+theme name such as `tokyo-night`).
+
+The TUI accepts an App ID only — there is no title search box. Title search
+(`--search`) remains deferred (plan/decisions.md §9), with a TUI `Input` widget
+as its natural future home.
 
 ## Reading the report
 
