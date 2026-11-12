@@ -19,6 +19,11 @@ The home screen is the branded entry point: a ``Keniran`` title, the ``keniran``
 wordmark, the approved tagline, and the App ID/Run controls grouped in one
 bordered command box. The branding is presentation only; every id, handler and
 worker contract below is unchanged.
+
+The home block and the results area share one vertically scrollable body, so
+short terminal heights scroll long content into view instead of clipping it.
+The scroll region is not focusable, which keeps the App ID input as the
+first-focused widget on mount.
 """
 
 from __future__ import annotations
@@ -29,7 +34,7 @@ from typing import Final
 
 from rich.text import Text
 from textual.app import App, ComposeResult
-from textual.containers import Container, Horizontal, Vertical
+from textual.containers import Container, Horizontal, Vertical, VerticalScroll
 from textual.widgets import Button, Footer, Header, Input, Static
 from textual.worker import Worker, WorkerState
 
@@ -49,6 +54,7 @@ TITLE_ID: Final = "keniran-title"
 WORDMARK_ID: Final = "keniran-wordmark"
 TAGLINE_ID: Final = "keniran-tagline"
 COMMAND_BOX_ID: Final = "command-box"
+BODY_ID: Final = "body"
 
 TAGLINE: Final = "Check whether your PC can run a Steam game."
 
@@ -63,6 +69,11 @@ class KeniranTui(App[None]):
     CSS = """
     Screen {
         background: $background;
+    }
+
+    #body {
+        width: 1fr;
+        height: 1fr;
     }
 
     #home {
@@ -111,7 +122,9 @@ class KeniranTui(App[None]):
     }
 
     #results {
-        height: 1fr;
+        height: auto;
+        width: 1fr;
+        min-height: 3;
         padding: 0 2;
     }
     """
@@ -139,21 +152,22 @@ class KeniranTui(App[None]):
 
     def compose(self) -> ComposeResult:
         yield Header()
-        with Vertical(id="home"):
-            yield Static("Keniran", id=TITLE_ID, classes="brand-title")
-            yield Static("keniran", id=WORDMARK_ID, classes="brand-wordmark")
-            yield Static(TAGLINE, id=TAGLINE_ID, classes="brand-tagline")
-            with (
-                Container(id=COMMAND_BOX_ID, classes="command-box"),
-                Horizontal(id="app-id-row"),
-            ):
-                yield Input(
-                    placeholder="Steam App ID",
-                    id=APP_ID_INPUT_ID,
-                    restrict=r"[0-9]*",
-                )
-                yield Button("Run", id=RUN_BUTTON_ID, variant="primary")
-        yield Container(id=RESULTS_ID)
+        with VerticalScroll(id=BODY_ID, can_focus=False):
+            with Vertical(id="home"):
+                yield Static("Keniran", id=TITLE_ID, classes="brand-title")
+                yield Static("keniran", id=WORDMARK_ID, classes="brand-wordmark")
+                yield Static(TAGLINE, id=TAGLINE_ID, classes="brand-tagline")
+                with (
+                    Container(id=COMMAND_BOX_ID, classes="command-box"),
+                    Horizontal(id="app-id-row"),
+                ):
+                    yield Input(
+                        placeholder="Steam App ID",
+                        id=APP_ID_INPUT_ID,
+                        restrict=r"[0-9]*",
+                    )
+                    yield Button("Run", id=RUN_BUTTON_ID, variant="primary")
+            yield Container(id=RESULTS_ID)
         yield Footer()
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:

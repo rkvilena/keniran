@@ -24,7 +24,7 @@ import pytest
 from rich.table import Table
 from rich.text import Text
 from textual.app import App
-from textual.containers import Container
+from textual.containers import Container, VerticalScroll
 from textual.pilot import Pilot
 from textual.widgets import Button, Footer, Header, Input, Static
 from textual.worker import WorkerFailed
@@ -45,6 +45,7 @@ from keniran.rendering.report_view import (
 )
 from keniran.tui.app import (
     APP_ID_INPUT_ID,
+    BODY_ID,
     COMMAND_BOX_ID,
     ERROR_ID,
     ERROR_STYLE,
@@ -285,6 +286,170 @@ def test_branded_styles_use_textual_theme_tokens() -> None:
             tagline = tui.query_one(f"#{TAGLINE_ID}", Static)
             assert tagline.styles.color.a >= 0.5
             assert tagline.styles.color.hex != variables["accent"]
+
+    _run(scenario())
+
+
+def test_home_hierarchy_fits_at_the_normal_terminal_size() -> None:
+    async def scenario() -> None:
+        tui = KeniranTui()
+        async with tui.run_test(size=(100, 30)) as pilot:
+            await pilot.pause()
+            assert tui.size.width == 100
+            assert tui.size.height == 30
+
+            title = tui.query_one(f"#{TITLE_ID}", Static)
+            wordmark = tui.query_one(f"#{WORDMARK_ID}", Static)
+            tagline = tui.query_one(f"#{TAGLINE_ID}", Static)
+            box = tui.query_one(f"#{COMMAND_BOX_ID}", Container)
+            results = tui.query_one(f"#{RESULTS_ID}", Container)
+
+            # The branded hierarchy survives the scroll wrapper unchanged.
+            assert title.region.y < wordmark.region.y < tagline.region.y < box.region.y
+            assert results.region.y >= box.region.bottom
+
+            # Everything fits inside the visible screen at the normal size.
+            assert box.region.bottom <= tui.size.height
+            assert results.region.bottom <= tui.size.height
+            assert results.region.height > 0
+            assert len(results.children) == 0
+
+    _run(scenario())
+
+
+def test_app_id_and_run_controls_are_not_horizontally_clipped() -> None:
+    async def scenario() -> None:
+        for width, height in ((100, 30), (80, 16)):
+            tui = KeniranTui()
+            async with tui.run_test(size=(width, height)) as pilot:
+                await pilot.pause()
+                app_id_input = tui.query_one(f"#{APP_ID_INPUT_ID}", Input)
+                run_button = tui.query_one(f"#{RUN_BUTTON_ID}", Button)
+
+                for widget in (app_id_input, run_button):
+                    region = widget.region
+                    assert region.width > 0
+                    assert region.height > 0
+                    assert region.x >= 0
+                    assert region.right <= tui.size.width
+
+                # The controls stay inside the visible screen, never pushed off
+                # the bottom by the scroll wrapper.
+                assert app_id_input.region.bottom <= tui.size.height
+                assert run_button.region.bottom <= tui.size.height
+
+    _run(scenario())
+
+
+def test_controls_remain_keyboard_reachable_at_a_compact_size() -> None:
+    async def scenario() -> None:
+        tui = KeniranTui()
+        async with tui.run_test(size=(80, 16)) as pilot:
+            app_id_input = tui.query_one(f"#{APP_ID_INPUT_ID}", Input)
+            run_button = tui.query_one(f"#{RUN_BUTTON_ID}", Button)
+
+            # The scroll region is not focusable, so the tab chain is still
+            # exactly the input followed by the Run button.
+            assert tui.screen.focus_chain == [app_id_input, run_button]
+
+            app_id_input.focus()
+            await pilot.pause()
+            assert tui.focused is app_id_input
+
+            await pilot.press("7", "2", "8")
+            assert app_id_input.value == "728"
+
+            await pilot.press("tab")
+            await pilot.pause()
+            assert tui.focused is run_button
+
+    _run(scenario())
+
+
+def test_long_results_scroll_to_their_end_at_a_compact_size() -> None:
+    async def scenario() -> None:
+        tui = KeniranTui()
+        async with tui.run_test(size=(80, 16)) as pilot:
+            results = tui.query_one(f"#{RESULTS_ID}", Container)
+            await results.mount(*[Static(f"result line {index}") for index in range(40)])
+
+            body = tui.query_one(f"#{BODY_ID}", VerticalScroll)
+            await _wait_until(lambda: body.max_scroll_y > 0, pilot)
+            assert body.show_vertical_scrollbar
+
+            # Before scrolling, the tail hangs below the visible body: it would
+            # be clipped if the body did not scroll.
+            last = results.children[-1]
+            await _wait_until(lambda: last.region.bottom > body.region.bottom, pilot)
+            assert last.region.bottom > body.region.bottom
+
+            body.scroll_end(animate=False, immediate=True)
+            await _wait_until(lambda: body.is_vertical_scroll_end, pilot)
+            # The compositor map settles on the next refresh; wait for it.
+            await _wait_until(lambda: last.region.bottom <= body.region.bottom, pilot)
+
+            assert body.scroll_offset.y == body.max_scroll_y
+            assert body.is_vertical_scroll_end
+            # The tail is now inside the visible body.
+            assert last.region.y >= body.region.y
+            assert last.region.bottom <= body.region.bottom
+
+    _run(scenario())
+
+
+def test_home_content_scrolls_to_its_end_at_a_short_height() -> None:
+    async def scenario() -> None:
+        tui = KeniranTui()
+        async with tui.run_test(size=(80, 16)) as pilot:
+            home = tui.query_one("#home")
+            await home.mount(*[Static(f"home filler {index}") for index in range(30)])
+
+            body = tui.query_one(f"#{BODY_ID}", VerticalScroll)
+            await _wait_until(lambda: body.max_scroll_y > 0, pilot)
+
+            body.scroll_end(animate=False, immediate=True)
+            await _wait_until(lambda: body.is_vertical_scroll_end, pilot)
+            # The long home block is reachable to its end, not clipped.
+            last = home.children[-1]
+            await _wait_until(lambda: last.region.bottom <= body.region.bottom, pilot)
+
+            assert body.scroll_offset.y == body.max_scroll_y
+            assert body.is_vertical_scroll_end
+            assert last.region.y >= body.region.y
+            assert last.region.bottom <= body.region.bottom
+
+    _run(scenario())
+
+
+def test_header_and_footer_stay_usable_while_the_body_scrolls() -> None:
+    async def scenario() -> None:
+        tui = KeniranTui()
+        async with tui.run_test(size=(80, 16)) as pilot:
+            header = tui.query_one(Header)
+            footer = tui.query_one(Footer)
+            header_top = header.region.y
+            footer_bottom = footer.region.bottom
+
+            results = tui.query_one(f"#{RESULTS_ID}", Container)
+            await results.mount(*[Static(f"result line {index}") for index in range(40)])
+
+            body = tui.query_one(f"#{BODY_ID}", VerticalScroll)
+            await _wait_until(lambda: body.max_scroll_y > 0, pilot)
+
+            body.scroll_end(animate=False, immediate=True)
+            await _wait_until(lambda: body.is_vertical_scroll_end, pilot)
+            # Wait for the compositor map to settle after the scroll.
+            await _wait_until(
+                lambda: results.children[-1].region.bottom <= body.region.bottom,
+                pilot,
+            )
+
+            assert body.is_vertical_scroll_end
+            # Docked widgets stay put while the body scrolls underneath them.
+            assert header.region.y == header_top
+            assert footer.region.bottom == footer_bottom
+            assert header.region.height > 0
+            assert footer.region.height > 0
 
     _run(scenario())
 
