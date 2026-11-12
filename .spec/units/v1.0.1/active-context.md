@@ -1,15 +1,15 @@
 # Active context — v1.0.1 (release)
 
-- current task: release unit planned; feature units are not yet specified.
-- state: v1.0.1 scope agreed 2026-11-12. Feature sequence: matching correctness first,
-  then TUI redesign; both gate the release chores.
-- decisions: OR-listed CPU/GPU requirements use meet-any semantics (least demanding
-  successfully matched candidate); common vendor aliases normalize before fuzzy
-  matching; below-threshold `best_guess` remains scorable and visibly badged.
-- design direction: dark slate/navy, muted lavender primary highlight, restrained warm
-  accent; Keniran title/header + large wordmark/tagline + App ID/Run command box; vertical
-  scroll on short terminals. Reference image is inspiration, not a pixel target.
-- next: plan `v1.0.1/requirement-alternatives` and `v1.0.1/tui-redesign` in feature mode;
-  only then run `/run v1.0.1`.
-- open: exact palette/breakpoints are intentionally left to the feature interview and
-  implementation; GitHub publishing is outside this unit.
+- current task: release blueprint written; feature units have their own complete specs
+  and task ledgers below this release directory.
+- state: v1.0.1 plans the requirement-alternatives fix first, then TUI redesign; both
+  gate all release chores.
+- preserved choices: meet-any OR semantics; lowest positive score among independently
+  matched candidates; retain original requirement string in `GameRequirements` and the
+  report; vendor aliases normalize; `best_guess` remains scorable and visibly badged.
+- visual direction: dark slate/navy, muted lavender highlight, restrained warm accent;
+  title/header, large wordmark/tagline, App ID/Run command box; vertical scrolling on
+  short terminals. Keep the Textual `tokyo-night` default and palette switching.
+- version/history: v1.0.1 is the intended first public version; v1.0.0 remains frozen
+  unpublished local history. Do not edit global `.spec/spec.md` in this release.
+- open: exact colors/layout breakpoints are flexible; GitHub publication is user-controlled.

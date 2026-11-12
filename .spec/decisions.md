@@ -237,3 +237,19 @@ Append-only. Newest first within each release block. Every entry inherits the ru
   a concise `CHANGELOG.md` with a version heading and grouped release notes.
   GitHub publication remains a user-controlled step; the release unit prepares a
   local annotated tag only. (source: blueprint planning 2026-11-12)
+
+## v1.0.1 blueprint refinement (2026-11-12)
+
+- **Requirement/report shape:** retain `GameRequirements.cpu_name` / `.gpu_name` as
+  the cleaned original strings and retain that full text in `ComponentRow.required_value`;
+  split alternatives internally for matching. This keeps the current model/report
+  contract while fixing the FC27 match. (source: user interview 2026-11-12)
+- **Feature ledger structure:** v1.0.1 is coordinated by release unit `v1.0.1`
+  (prefix `REL101`), with ordered feature units `v1.0.1/requirement-alternatives`
+  (prefix `ALT`) followed by `v1.0.1/tui-redesign` (prefix `TUIX`). Both feature
+  units are specified under the release directory and gate release chores.
+  (source: user request 2026-11-12)
+- **Tagline copy for the redesigned home:** use “Check whether your PC can run a
+  Steam game.” as a concise, grammatical version of the user's illustrative
+  compatibility subtitle; copy remains easy to revise during visual review.
+  (source: blueprint assumption from user wording 2026-11-12)
