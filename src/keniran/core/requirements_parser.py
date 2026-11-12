@@ -3,6 +3,8 @@
 Implements Step C of ``plan/detailed-flow.md``: label detection, noise
 stripping, unit conversion, the GPU/VRAM tail split, optional target tokens,
 and the honesty gate that refuses to guess model-numberless component names.
+:func:`split_alternatives` exposes the cleaned ``"A or B"`` component names as
+independently looked-up candidates without altering the parsed fields.
 
 Everything in this module is pure: no I/O, no HTTP, no adapter imports.
 :func:`parse` consumes the text produced by
@@ -29,6 +31,13 @@ _BRAND_EQUIVALENT_RE: Final = re.compile(
 _QUALIFIER_RE: Final = re.compile(
     r"\b(?:or|and)\s+(?:better|equivalent|higher|above|later|newer|greater)\b",
     re.IGNORECASE,
+)
+# Every standalone ``or`` separates candidates. Qualifier prose ("or better")
+# is split away here and then dropped by :func:`split_alternatives`, so a
+# qualifier word can never survive as an extra candidate.
+_ALTERNATIVE_SEPARATOR_RE: Final = re.compile(r"\bor\b", re.IGNORECASE)
+_QUALIFIER_WORDS: Final = frozenset(
+    {"better", "equivalent", "higher", "above", "later", "newer", "greater"}
 )
 _CPU_WORD_RE: Final = re.compile(r"\b(?:cpu|processor)\b", re.IGNORECASE)
 _SIZE_RE: Final = re.compile(r"(?<!\d)(\d+(?:\.\d+)?)\s*(gb|mb|tb)\b", re.IGNORECASE)
@@ -168,6 +177,36 @@ def parse(text: str) -> GameRequirements:
         target_fps=_find_fps(text),
         unverified=unverified,
     )
+
+
+def split_alternatives(name_text: str) -> tuple[str, ...]:
+    """Split a cleaned component name into its ``or`` alternatives.
+
+    ``"AMD RX 570 or Nvidia GTX 1050 Ti"`` ->
+    ``("AMD RX 570", "Nvidia GTX 1050 Ti")``. The separator is a standalone,
+    case-insensitive ``or``; candidate casing is preserved. Whitespace and
+    empty candidates are dropped, so empty input yields ``()`` and a name
+    without a disjunction yields a single-element tuple. Qualifier words
+    (``better``, ``equivalent``, ``higher``, …) are prose, not component
+    names, so an extra candidate that is only such a word is dropped:
+    ``"A or better or B"`` -> ``("A", "B")`` and
+    ``"Intel Core i5-6500 or better"`` -> ``("Intel Core i5-6500",)``.
+    Qualifier words are dropped only as *extra* candidates: when everything
+    left after the split is a single qualifier word it is the whole value and
+    stays, so an all-qualifier residue returns as a single candidate —
+    ``"or better"`` -> ``("better",)`` and
+    ``"or equivalent"`` -> ``("equivalent",)``.
+    Candidates are trimmed of whitespace only: commas, slashes, colons,
+    semicolons, and hyphens are ordinary candidate characters, so
+    ``"AMD RX 470/570"`` stays one candidate and ``"/"`` is a single candidate.
+    """
+    candidates = [part.strip() for part in _ALTERNATIVE_SEPARATOR_RE.split(name_text)]
+    candidates = [candidate for candidate in candidates if candidate]
+    if len(candidates) > 1:
+        candidates = [
+            candidate for candidate in candidates if candidate.casefold() not in _QUALIFIER_WORDS
+        ]
+    return tuple(candidates)
 
 
 def _normalize_label(label: str) -> str:
