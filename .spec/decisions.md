@@ -253,3 +253,15 @@ Append-only. Newest first within each release block. Every entry inherits the ru
   Steam game.” as a concise, grammatical version of the user's illustrative
   compatibility subtitle; copy remains easy to revise during visual review.
   (source: blueprint assumption from user wording 2026-11-12)
+
+## v1.0.1 run ruling (2026-11-12)
+
+- **`split_alternatives` all-qualifier edge (ALT-001 review dispute):** when the input
+  contains an `or` separator but every remaining candidate is a qualifier word — e.g.
+  `split_alternatives("or better")` — the function returns the residue as a single
+  candidate (`("better",)`), NOT `()`. Qualifier words are dropped only when they appear
+  as EXTRA candidates beside a real value (`"A or better or B"` → `("A", "B")`;
+  `"Intel Core i5-6500 or better"` → `("Intel Core i5-6500",)`). This preserves the
+  "non-empty input without a disjunction ⇒ single candidate" invariant. The third-cycle
+  verifier finding demanding `()` for `"or better"` is superseded by this ruling.
+  (source: user decision 2026-11-12, answering the RESOLVE entry)

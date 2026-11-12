@@ -1,6 +1,6 @@
 # Tasks — v1.0.1/requirement-alternatives
 
-- [ ] ALT-001: Split cleaned CPU/GPU requirement alternatives
+- [x] ALT-001: Split cleaned CPU/GPU requirement alternatives
   depends: -
   files: src/keniran/core/requirements_parser.py, tests/test_requirements_parser.py
   pattern: `_clean_name`, `_parse_cpu`, `_parse_gpu` in src/keniran/core/requirements_parser.py; parser tests in tests/test_requirements_parser.py
@@ -19,7 +19,7 @@
       python -m pytest tests/test_requirements_parser.py -q
       python -m ruff format . && python -m ruff check . && python -m mypy && python -m pytest -q
   out-of-scope: benchmark aliasing, service scoring, new model fields, comma/slash alternatives
-  status: blocked: failed-review (verify cycle 3; all acceptance commands green; open qualifier-edge dispute — see active-context.md)
+  status: done (commit e7b219c) after spec-owner ruling on the all-qualifier edge (.spec/decisions.md "v1.0.1 run ruling"); 4 verify cycles total
 
 - [x] ALT-002: Normalize common GPU vendor aliases for benchmark lookup
   depends: -

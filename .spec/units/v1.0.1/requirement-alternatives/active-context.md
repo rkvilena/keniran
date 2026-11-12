@@ -1,18 +1,17 @@
 # Active context — v1.0.1/requirement-alternatives
 
-RESOLVE: For `split_alternatives`, how should a disjunction whose candidates are ALL
-qualifier words behave — e.g. `split_alternatives("or better")`? The verifier requires
-`()` (drop qualifier words whenever the input contains an `or` separator), while the
-implementer kept `("better",)` (qualifier words dropped only when >1 candidate remains,
-preserving "non-empty input without a disjunction ⇒ 1-tuple"). The written acceptance
-("After parser cleanup, `or better` / `or equivalent` still produce a single candidate
-rather than an alternative list") does not pin this raw-text edge, which never occurs in
-the pipeline (`_clean_name` removes qualifiers before splitting). Decision needed to
-unblock ALT-001.
+RESOLVE — RESOLVED (user decision 2026-11-12): `split_alternatives("or better")` returns
+`("better",)`. Qualifier words are dropped only as EXTRA candidates (`"A or better or B"`
+→ `("A", "B")`); an all-qualifier residue stays a single candidate, preserving
+"non-empty input without a disjunction ⇒ 1-tuple". Recorded in `.spec/decisions.md`
+("v1.0.1 run ruling"). The ruled behavior is already what the uncommitted ALT-001 code
+implements; the ruling is pinned by test in this unit's task work.
 
-- current task: ALT-002 → **done (commit c63b69c)**. ALT-001 remains **blocked: failed-review**
-  (RESOLVE entry below). Next: TUIX-001 (buildable; release-spec sequencing deviation
-  noted in the release active-context), then TUIX-002; ALT-003 and all REL101 chores are blocked.
+- current task: ALT-001 → **done (commit e7b219c)** after the spec-owner ruling
+  (`.spec/decisions.md` "v1.0.1 run ruling": all-qualifier residue stays a single
+  candidate, e.g. `"or better"` → `("better",)`). ALT-002 done (c63b69c). Both
+  dependencies of ALT-003 are now satisfied → next task: ALT-003 (meet-any scoring +
+  FC27 regression).
 - state: vendor-alias normalization landed — NVIDIA≡GeForce → canonical `geforce`,
   AMD≡Radeon → canonical `amd`, token-level via `_TOKEN_RE` with a presence guard, applied
   inside `normalize_name` so probe and DB rows share the key space. Gate/ladder/score
