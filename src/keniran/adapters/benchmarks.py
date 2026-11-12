@@ -91,6 +91,15 @@ _ALIASES: Final[dict[str, str]] = {
     "gtx 1060": "geforce gtx 1060",
 }
 
+# Equivalent vendor terms folded onto one canonical token per class. Probes
+# and database rows only match when they normalize to the same key, so the
+# vendor word must not split a pair such as "Nvidia GTX 1050 Ti" /
+# "GeForce GTX 1050 Ti" or "AMD RX 570" / "Radeon RX 570".
+_VENDOR_CANONICAL_TOKENS: Final[tuple[tuple[str, str], ...]] = (
+    ("nvidia", "geforce"),
+    ("radeon", "amd"),
+)
+
 _MONTHS: Final[dict[str, int]] = {
     "jan": 1,
     "feb": 2,
@@ -122,7 +131,8 @@ def normalize_name(name_text: str) -> str:
 
     Lowercases, drops punctuation except ``+ - .``, removes clock/trademark/
     qualifier noise, canonicalizes whitespace around hyphens and VRAM suffixes
-    (``6 GB`` -> ``6gb``), and applies the hand-maintained vendor alias map.
+    (``6 GB`` -> ``6gb``), applies the hand-maintained vendor alias map, and
+    folds equivalent vendor tokens onto one canonical term.
     """
     text = name_text.lower().translate(_DASH_TRANSLATION)
     text = text.replace("\u00ae", " ").replace("\u2122", " ")
@@ -135,7 +145,7 @@ def normalize_name(name_text: str) -> str:
     text = _HYPHEN_SPACE_RE.sub("-", text)
     text = _HYPHEN_RUN_RE.sub("-", text)
     text = _WHITESPACE_RE.sub(" ", text).strip(" -.")
-    return _apply_aliases(text)
+    return _canonicalize_vendor_tokens(_apply_aliases(text))
 
 
 def has_model_number(name_text: str) -> bool:
@@ -235,6 +245,36 @@ def _apply_aliases(key: str) -> str:
         if key.startswith(prefix):
             return f"{target} {key[len(prefix) :]}"
     return key
+
+
+def _canonicalize_vendor_tokens(key: str) -> str:
+    """Fold equivalent vendor words onto one canonical token per class.
+
+    ``NVIDIA`` and ``GeForce`` identify the same GPU vendor, as do ``AMD`` and
+    ``Radeon``. A lookup only matches when the probe key equals (or fuzzily
+    overlaps) a database row key, so those spellings must normalize alike:
+    ``nvidia`` becomes ``geforce`` and ``radeon`` becomes ``amd``.
+
+    The rewrite is skipped when the canonical token already appears in the key,
+    which leaves names that carry both spellings (``nvidia geforce ...``,
+    ``amd radeon ...``) untouched. Comparison is whole-token only, as defined by
+    :data:`_TOKEN_RE`, so tokens such as ``geforce3`` are never rewritten and a
+    vendor token glued to a retained separator (``nvidia-rtx 4070``) is still
+    canonicalized in place without disturbing that separator.
+    """
+    tokens = _tokens(key)
+    replacements: dict[str, str] = {
+        source: canonical
+        for source, canonical in _VENDOR_CANONICAL_TOKENS
+        if canonical not in tokens
+    }
+    if not replacements:
+        return key
+
+    def rewrite(match: re.Match[str]) -> str:
+        return replacements.get(match.group(0), match.group(0))
+
+    return _TOKEN_RE.sub(rewrite, key)
 
 
 def _records(

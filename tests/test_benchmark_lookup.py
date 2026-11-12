@@ -166,3 +166,120 @@ def test_na_benchmark_values_release_as_null_never_zero(db: dict[str, Any]) -> N
     assert result.best_entry.score is None
     assert result.best_entry.thread is None
     assert result.best_entry.samples is None
+
+
+# Inline rows hand-built from the shape of the vendored gpu_db.json entries so
+# vendor-alias coverage does not depend on fixture contents.
+NVIDIA_ALIAS_DB: dict[str, Any] = {
+    "data": [
+        {
+            "id": 3595,
+            "name": "GeForce GTX 1050 Ti",
+            "g3d_mark": 6368,
+            "thread": None,
+            "tdp": 75,
+            "samples": 47737,
+            "href": "video_lookup.php?gpu=GeForce+GTX+1050+Ti&id=3595",
+        },
+    ]
+}
+
+AMD_ALIAS_DB: dict[str, Any] = {
+    "data": [
+        {
+            "id": 3558,
+            "name": "Radeon RX 470/570",
+            "g3d_mark": 7904,
+            "thread": None,
+            "tdp": 120,
+            "samples": 24386,
+            "href": "video_lookup.php?gpu=Radeon+RX+470%2F570&id=3558",
+        },
+    ]
+}
+
+AMD_EXACT_ALIAS_DB: dict[str, Any] = {
+    "data": [
+        {
+            "id": 3559,
+            "name": "Radeon RX 570",
+            "g3d_mark": 8100,
+            "thread": None,
+            "tdp": 120,
+            "samples": 12100,
+        },
+    ]
+}
+
+
+def test_normalize_name_folds_equivalent_vendor_tokens() -> None:
+    assert normalize_name("Nvidia GTX 1050 Ti") == "geforce gtx 1050 ti"
+    assert normalize_name("GeForce GTX 1050 Ti") == "geforce gtx 1050 ti"
+    assert normalize_name("AMD RX 570") == "amd rx 570"
+    assert normalize_name("Radeon RX 570") == "amd rx 570"
+    assert normalize_name("Radeon RX 470/570") == "amd rx 470 570"
+
+
+def test_normalize_name_folds_vendor_tokens_glued_to_separators() -> None:
+    # `_TOKEN_RE` boundaries, not whitespace, define a token: a vendor word
+    # adjacent to a retained hyphen or period must still be canonicalized while
+    # the separator itself survives unchanged.
+    assert normalize_name("Nvidia-RTX 4070") == "geforce-rtx 4070"
+    assert normalize_name("Radeon-RX 570") == "amd-rx 570"
+    assert normalize_name("Nvidia.RTX 4070") == "geforce.rtx 4070"
+    # Whole-token matching: "geforce3" is one token, never a "geforce" hit.
+    assert normalize_name("GeForce3 Ti 200") == "geforce3 ti 200"
+    # "+" stays inside the token, so a canonical token is not invented.
+    assert normalize_name("AMD 7900XTX+ 24GB") == "amd 7900xtx+ 24gb"
+
+
+def test_normalize_name_keeps_names_with_both_vendor_tokens() -> None:
+    assert normalize_name("NVIDIA GeForce GTX 1060 6 GB") == "nvidia geforce gtx 1060 6gb"
+    assert normalize_name("AMD Radeon R9 280X") == "amd radeon r9 280x"
+
+
+@pytest.mark.parametrize(
+    ("vendor_name", "canonical_name"),
+    [
+        ("Nvidia GTX 1050 Ti", "GeForce GTX 1050 Ti"),
+        ("AMD RX 570", "Radeon RX 570"),
+    ],
+)
+def test_vendor_alias_normalizes_probe_and_row_alike(
+    vendor_name: str,
+    canonical_name: str,
+) -> None:
+    assert normalize_name(vendor_name) == normalize_name(canonical_name)
+
+
+def test_nvidia_probe_resolves_to_geforce_row_exactly() -> None:
+    result = lookup(NVIDIA_ALIAS_DB, "Nvidia GTX 1050 Ti", kind="gpu")
+
+    assert result.matched_by == "exact"
+    assert result.score_ratio == 1.0
+    assert result.best_entry is not None
+    # The raw database row name is preserved, not the normalized key.
+    assert result.best_entry.name == "GeForce GTX 1050 Ti"
+    assert result.best_entry.score == 6368.0
+    assert result.best_entry.thread is None
+
+
+def test_amd_probe_resolves_to_radeon_row_at_or_above_gate() -> None:
+    result = lookup(AMD_ALIAS_DB, "AMD RX 570", kind="gpu")
+
+    assert result.best_entry is not None
+    assert result.best_entry.name == "Radeon RX 470/570"
+    assert result.best_entry.score == 7904.0
+    assert result.score_ratio is not None
+    assert result.score_ratio >= CONFIDENCE_GATE
+    assert result.matched_by == "fuzzy"
+
+
+def test_amd_probe_matches_radeon_row_exactly() -> None:
+    result = lookup(AMD_EXACT_ALIAS_DB, "AMD RX 570", kind="gpu")
+
+    assert result.matched_by == "exact"
+    assert result.score_ratio == 1.0
+    assert result.best_entry is not None
+    assert result.best_entry.name == "Radeon RX 570"
+    assert result.best_entry.score == 8100.0
