@@ -14,7 +14,7 @@
   out-of-scope: feature code, changelog, README/plan edits, tag creation
   status: done (commit 0ccb230)
 
-- [ ] REL101-002: Add concise 1.0.1 changelog entry
+- [x] REL101-002: Add concise 1.0.1 changelog entry
   depends: -
   gated: v1.0.1/requirement-alternatives, v1.0.1/tui-redesign
   files: CHANGELOG.md
@@ -27,7 +27,7 @@
     acceptance commands:
       python -m pytest -q
   out-of-scope: version bump, README or plan/decisions edits, release tag
-  status: blocked: pending-feature (v1.0.1/requirement-alternatives incomplete: ALT-001 blocked: failed-review; ALT-003 blocked: depends-on ALT-001)
+  status: done (commit c30f303)
 
 - [ ] REL101-003: Docs sweep — README + canonical plan decisions
   depends: -
