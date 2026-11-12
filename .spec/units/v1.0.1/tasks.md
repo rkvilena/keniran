@@ -1,6 +1,6 @@
 # Tasks — v1.0.1 release chores
 
-- [ ] REL101-001: Version bump to 1.0.1
+- [x] REL101-001: Version bump to 1.0.1
   depends: -
   gated: v1.0.1/requirement-alternatives, v1.0.1/tui-redesign
   files: pyproject.toml
@@ -12,7 +12,7 @@
     acceptance commands:
       python -m pytest -q
   out-of-scope: feature code, changelog, README/plan edits, tag creation
-  status: blocked: pending-feature (v1.0.1/requirement-alternatives incomplete: ALT-001 blocked: failed-review; ALT-003 blocked: depends-on ALT-001)
+  status: done (commit 0ccb230)
 
 - [ ] REL101-002: Add concise 1.0.1 changelog entry
   depends: -
