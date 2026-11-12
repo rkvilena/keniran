@@ -209,3 +209,31 @@ Append-only. Newest first within each release block. Every entry inherits the ru
   parsing adapter's trigger ("rules-parser accuracy proves poor") technically
   fired, but these rules-level fixes are cheaper; LLM stays backlog.
   (source: user test 2026-11-11 + blueprint offline reproduction)
+
+## Release v1.0.1 (planned; decided 2026-11-12)
+
+- **Version/history:** v1.0.0 remains frozen local history; the user chose a new
+  release unit rather than reopening its completed ledger. The earlier decision
+  that v1.0.0 must be the first public release is superseded: v1.0.1 is now the
+  first intended public release. (source: user interview 2026-11-12)
+- **Scope and order:** v1.0.1 delivers the FC27 requirements-matching fix first,
+  then the Textual TUI visual redesign; both feature units gate the release
+  chores. (source: user interview 2026-11-12)
+- **OR requirement semantics:** independently match CPU/GPU alternatives joined
+  by `or`; the user machine needs to meet at least one, so compare against the
+  least demanding candidate that resolves to a valid match. If none resolves,
+  retain the current unverified behavior. (source: user interview 2026-11-12)
+- **Vendor aliases:** normalize `NVIDIA`/`GeForce` and `AMD`/`Radeon` before fuzzy
+  matching. Preserve v0.2.1's policy that below-threshold `best_guess` matches
+  remain scorable with their ⚡ badge; do not qualify the verdict solely due to
+  match confidence in this release. (source: user interview 2026-11-12)
+- **TUI visual direction:** dark slate/navy base, muted lavender primary highlight,
+  restrained warm accent; clear Keniran title/header, large `keniran` wordmark
+  and short compatibility tagline, existing App ID/Run controls as the primary
+  command box, and vertical scrolling for short terminal heights. Use the shared
+  image as mood/layout inspiration, not a pixel-perfect target. (source: user
+  interview 2026-11-12)
+- **Changelog convention:** no existing changelog file was found; v1.0.1 introduces
+  a concise `CHANGELOG.md` with a version heading and grouped release notes.
+  GitHub publication remains a user-controlled step; the release unit prepares a
+  local annotated tag only. (source: blueprint planning 2026-11-12)
