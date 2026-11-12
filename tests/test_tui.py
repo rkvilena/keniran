@@ -45,11 +45,16 @@ from keniran.rendering.report_view import (
 )
 from keniran.tui.app import (
     APP_ID_INPUT_ID,
+    COMMAND_BOX_ID,
     ERROR_ID,
     ERROR_STYLE,
     RESULTS_ID,
     RUN_BUTTON_ID,
     STATUS_ID,
+    TAGLINE,
+    TAGLINE_ID,
+    TITLE_ID,
+    WORDMARK_ID,
     KeniranTui,
 )
 
@@ -197,6 +202,89 @@ def test_app_mounts_shell_with_tokyo_night_theme() -> None:
             assert isinstance(tui.query_one(f"#{RUN_BUTTON_ID}", Button), Button)
             results = tui.query_one(f"#{RESULTS_ID}", Container)
             assert len(results.children) == 0
+
+    _run(scenario())
+
+
+def test_home_screen_shows_the_keniran_brand_block() -> None:
+    async def scenario() -> None:
+        tui = KeniranTui()
+        async with tui.run_test():
+            title = tui.query_one(f"#{TITLE_ID}", Static)
+            assert str(title.content).strip() == "Keniran"
+
+            wordmark = tui.query_one(f"#{WORDMARK_ID}", Static)
+            assert str(wordmark.content).strip() == "keniran"
+            assert wordmark.has_class("brand-wordmark")
+
+            tagline = tui.query_one(f"#{TAGLINE_ID}", Static)
+            assert TAGLINE == "Check whether your PC can run a Steam game."
+            assert str(tagline.content).strip() == TAGLINE
+
+            # The brand block is stacked above the command box, never in #results,
+            # which stays empty on mount.
+            box = tui.query_one(f"#{COMMAND_BOX_ID}", Container)
+            assert title.region.y < wordmark.region.y < tagline.region.y < box.region.y
+            assert len(tui.query_one(f"#{RESULTS_ID}", Container).children) == 0
+
+    _run(scenario())
+
+
+def test_app_id_and_run_controls_are_grouped_in_the_command_box() -> None:
+    async def scenario() -> None:
+        tui = KeniranTui()
+        async with tui.run_test():
+            box = tui.query_one(f"#{COMMAND_BOX_ID}", Container)
+            assert box.has_class("command-box")
+
+            app_id_input = tui.query_one(f"#{APP_ID_INPUT_ID}", Input)
+            run_button = tui.query_one(f"#{RUN_BUTTON_ID}", Button)
+            assert app_id_input in list(box.query(Input))
+            assert run_button in list(box.query(Button))
+
+            # The grouping is visual: a rounded panel border on the surface pane.
+            border_style, border_color = box.styles.border_top
+            assert border_style == "round"
+            assert border_color.hex == tui.get_css_variables()["panel"]
+            assert box.styles.background.hex == tui.get_css_variables()["surface"]
+
+            # Both controls keep a real, visible region inside the box.
+            assert app_id_input.region.width > 0
+            assert run_button.region.width > 0
+
+    _run(scenario())
+
+
+def test_branded_styles_use_textual_theme_tokens() -> None:
+    async def scenario() -> None:
+        tui = KeniranTui()
+        async with tui.run_test():
+            css = KeniranTui.CSS
+            for token in (
+                "$background",
+                "$surface",
+                "$panel",
+                "$primary",
+                "$accent",
+                "$text-muted",
+            ):
+                assert token in css
+            assert tui.current_theme.name == "tokyo-night"
+
+            variables = tui.get_css_variables()
+            assert variables["text"] != variables["background"]
+            assert variables["primary"] == "#BB9AF7"
+            assert variables["accent"] == "#FE9E64"
+
+            # The wordmark is the large lavender brand mark (bold + $primary).
+            wordmark = tui.query_one(f"#{WORDMARK_ID}", Static)
+            assert wordmark.styles.color.hex == variables["primary"]
+            assert wordmark.styles.text_style.bold
+
+            # Body copy stays on the muted text colour, never on the warm accent.
+            tagline = tui.query_one(f"#{TAGLINE_ID}", Static)
+            assert tagline.styles.color.a >= 0.5
+            assert tagline.styles.color.hex != variables["accent"]
 
     _run(scenario())
 

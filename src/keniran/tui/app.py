@@ -14,6 +14,11 @@ Failure paths are honest and non-fatal, mirroring the CLI's ``_fail`` helper:
 invalid app ids and worker errors (Steam adapter failures or unexpected
 exceptions) are mounted as styled inline messages, the Run button is
 re-enabled, and the next check can run in the same session.
+
+The home screen is the branded entry point: a ``Keniran`` title, the ``keniran``
+wordmark, the approved tagline, and the App ID/Run controls grouped in one
+bordered command box. The branding is presentation only; every id, handler and
+worker contract below is unchanged.
 """
 
 from __future__ import annotations
@@ -24,7 +29,7 @@ from typing import Final
 
 from rich.text import Text
 from textual.app import App, ComposeResult
-from textual.containers import Container, Horizontal
+from textual.containers import Container, Horizontal, Vertical
 from textual.widgets import Button, Footer, Header, Input, Static
 from textual.worker import Worker, WorkerState
 
@@ -40,6 +45,13 @@ RESULTS_ID: Final = "results"
 ERROR_ID: Final = "check-error"
 ERROR_STYLE: Final = "bold red"
 
+TITLE_ID: Final = "keniran-title"
+WORDMARK_ID: Final = "keniran-wordmark"
+TAGLINE_ID: Final = "keniran-tagline"
+COMMAND_BOX_ID: Final = "command-box"
+
+TAGLINE: Final = "Check whether your PC can run a Steam game."
+
 
 class KeniranTui(App[None]):
     """Minimal keniran TUI shell: app-id input, Run button, results area."""
@@ -49,9 +61,44 @@ class KeniranTui(App[None]):
     theme = "tokyo-night"
 
     CSS = """
+    Screen {
+        background: $background;
+    }
+
+    #home {
+        height: auto;
+        width: 1fr;
+        padding: 1 2 0 2;
+    }
+
+    #keniran-title {
+        color: $text-muted;
+        text-style: bold;
+        height: auto;
+    }
+
+    #keniran-wordmark {
+        color: $primary;
+        text-style: bold;
+        height: auto;
+        padding: 0 0 1 0;
+    }
+
+    #keniran-tagline {
+        color: $text-muted;
+        height: auto;
+    }
+
+    #command-box {
+        border: round $panel;
+        background: $surface;
+        height: auto;
+        width: 1fr;
+        padding: 0 1;
+    }
+
     #app-id-row {
         height: auto;
-        padding: 1 2;
     }
 
     #app-id-input {
@@ -60,6 +107,7 @@ class KeniranTui(App[None]):
 
     #run-button {
         margin-left: 2;
+        border: tall $accent;
     }
 
     #results {
@@ -91,13 +139,20 @@ class KeniranTui(App[None]):
 
     def compose(self) -> ComposeResult:
         yield Header()
-        with Horizontal(id="app-id-row"):
-            yield Input(
-                placeholder="Steam App ID",
-                id=APP_ID_INPUT_ID,
-                restrict=r"[0-9]*",
-            )
-            yield Button("Run", id=RUN_BUTTON_ID, variant="primary")
+        with Vertical(id="home"):
+            yield Static("Keniran", id=TITLE_ID, classes="brand-title")
+            yield Static("keniran", id=WORDMARK_ID, classes="brand-wordmark")
+            yield Static(TAGLINE, id=TAGLINE_ID, classes="brand-tagline")
+            with (
+                Container(id=COMMAND_BOX_ID, classes="command-box"),
+                Horizontal(id="app-id-row"),
+            ):
+                yield Input(
+                    placeholder="Steam App ID",
+                    id=APP_ID_INPUT_ID,
+                    restrict=r"[0-9]*",
+                )
+                yield Button("Run", id=RUN_BUTTON_ID, variant="primary")
         yield Container(id=RESULTS_ID)
         yield Footer()
 
