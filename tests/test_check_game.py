@@ -532,3 +532,298 @@ def test_requirement_extractor_protocol_matches_parser_output_schema() -> None:
             return GameRequirements()
 
     assert isinstance(_StubExtractor(), RequirementExtractor)
+
+
+# Inline rows mirroring the shapes of the vendored cpus2a.json / gpu_db.json so
+# the OR-alternative regression does not depend on the mini fixture contents.
+FC27_DB: dict[str, Any] = {
+    "data": [
+        {
+            "id": "9001",
+            "name": "AMD Ryzen 7 5800X",
+            "cpumark": "15000",
+            "thread": "3200",
+            "date": "Jan 2021",
+            "cat": "Desktop",
+            "cpuCount": 1,
+            "samples": "500",
+        },
+        {
+            "id": "9002",
+            "name": "AMD Ryzen 5 3600",
+            "cpumark": "6500",
+            "thread": "2200",
+            "date": "Nov 2019",
+            "cat": "Desktop",
+            "cpuCount": 1,
+            "samples": "500",
+        },
+        {
+            # Dated newer than the Ryzen row on purpose: the old whole-string
+            # probe ("AMD Ryzen 5 3600 or Intel Core i7-8700K") preferred this
+            # row (9000), while fan-out keeps the weaker 6500 alternative.
+            "id": "9003",
+            "name": "Intel Core i7-8700K",
+            "cpumark": "9000",
+            "thread": "2800",
+            "date": "Jun 2020",
+            "cat": "Desktop",
+            "cpuCount": 1,
+            "samples": "500",
+        },
+        {
+            "id": 3594,
+            "name": "GeForce RTX 3050 Laptop GPU",
+            "g3d_mark": 11718,
+            "thread": None,
+            "tdp": 75,
+            "samples": 5000,
+        },
+        {
+            "id": 3558,
+            "name": "Radeon RX 470/570",
+            "g3d_mark": 7904,
+            "thread": None,
+            "tdp": 120,
+            "samples": 24386,
+        },
+        {
+            "id": 3595,
+            "name": "GeForce GTX 1050 Ti",
+            "g3d_mark": 6368,
+            "thread": None,
+            "tdp": 75,
+            "samples": 47737,
+        },
+        {
+            # High-scoring decoy: it must never be selected.
+            "id": 3590,
+            "name": "NVIDIA A40",
+            "g3d_mark": 13900,
+            "thread": None,
+            "tdp": 300,
+            "samples": 1000,
+        },
+    ]
+}
+
+FC27_HTML = (
+    "<strong>Minimum:</strong><br><ul>"
+    "<li><strong>Processor:</strong> AMD Ryzen 5 3600 or Intel Core i7-8700K</li>"
+    "<li><strong>Memory:</strong> 8 GB</li>"
+    "<li><strong>Graphics:</strong> AMD RX 570 or Nvidia GTX 1050 Ti, 4 GB VRAM</li>"
+    "<li><strong>Storage:</strong> 30 GB</li>"
+    "</ul>"
+)
+
+FC27_SPEC = SystemSpec(
+    platform="win32",
+    cpu_name="AMD Ryzen 7 5800X",
+    ram_gb=16.0,
+    gpu_name="GeForce RTX 3050 Laptop GPU",
+    vram_gb=8.0,
+    disk_free_gb=100.0,
+    audited_at=AUDITED_AT,
+)
+
+# Same rows without the Radeon, so the AMD alternative has nothing usable.
+FC27_DB_NO_RX: dict[str, Any] = {
+    "data": [row for row in FC27_DB["data"] if row["name"] != "Radeon RX 470/570"]
+}
+
+
+def test_fc27_or_alternatives_select_the_least_demanding_target() -> None:
+    report = _check(FC27_DB, html=FC27_HTML, spec=FC27_SPEC)
+
+    cpu_row, gpu_row = report.components[0], report.components[1]
+
+    assert cpu_row.required_value == "AMD Ryzen 5 3600 or Intel Core i7-8700K"
+    assert cpu_row.matched_name == "AMD Ryzen 5 3600"
+    assert cpu_row.confidence == 1.0
+    assert cpu_row.ratio == pytest.approx(15000.0 / 6500.0)
+    assert cpu_row.unverified is False
+
+    # The full OR string is disclosed, but the selected entry is the weakest
+    # usable alternative (6368), never the high-scoring A40 decoy (13900).
+    assert gpu_row.required_value == "AMD RX 570 or Nvidia GTX 1050 Ti"
+    assert gpu_row.matched_name == "GeForce GTX 1050 Ti"
+    assert gpu_row.confidence == 1.0
+    assert gpu_row.ratio == pytest.approx(11718.0 / 6368.0)
+    assert gpu_row.unverified is False
+
+    assert report.verdict is not None
+    assert report.verdict.band is VerdictBand.PASS
+    assert report.verdict.ratio == pytest.approx(11718.0 / 6368.0)
+    assert report.verdict.display_percent == 100.0
+    assert report.verdict.spec_shortfall is False
+    assert report.verdict.st_warning is False
+    assert not any(row.unverified for row in report.components)
+
+
+def test_unmatched_alternative_alongside_a_usable_alternative() -> None:
+    report = _check(FC27_DB_NO_RX, html=FC27_HTML, spec=FC27_SPEC)
+
+    gpu_row = report.components[1]
+    assert gpu_row.required_value == "AMD RX 570 or Nvidia GTX 1050 Ti"
+    assert gpu_row.matched_name == "GeForce GTX 1050 Ti"
+    assert gpu_row.confidence == 1.0
+    assert gpu_row.ratio == pytest.approx(11718.0 / 6368.0)
+    assert gpu_row.unverified is False
+
+
+NO_USABLE_DB: dict[str, Any] = {
+    "data": [
+        {
+            "id": "788",
+            "name": "Intel Core i5-2300 @ 2.80GHz",
+            "cpumark": "3420",
+            "thread": "1428",
+            "date": "Jan 2011",
+            "cat": "Desktop",
+            "cpuCount": 1,
+            "samples": "1139",
+        },
+        {
+            "id": 3590,
+            "name": "NVIDIA A40",
+            "g3d_mark": 13900,
+            "thread": None,
+            "tdp": 300,
+            "samples": 100,
+        },
+    ]
+}
+
+NO_USABLE_HTML = (
+    "<strong>Minimum:</strong><br><ul>"
+    "<li><strong>Processor:</strong> Intel Core i5-2300</li>"
+    "<li><strong>Memory:</strong> 8 GB</li>"
+    "<li><strong>Graphics:</strong> Intel Arc A770 or AMD Radeon RX 6800</li>"
+    "<li><strong>Storage:</strong> 30 GB</li>"
+    "</ul>"
+)
+
+
+def test_no_usable_alternatives_leaves_the_row_unverified() -> None:
+    report = _check(NO_USABLE_DB, html=NO_USABLE_HTML)
+
+    gpu_row = report.components[1]
+    assert gpu_row.component is ComponentName.GPU
+    assert gpu_row.required_value == "Intel Arc A770 or AMD Radeon RX 6800"
+    assert gpu_row.matched_name is None
+    assert gpu_row.confidence is None
+    assert gpu_row.ratio is None
+    assert gpu_row.unverified is True
+
+    # The CPU row still resolves, so the verdict itself is produced as before.
+    cpu_row = report.components[0]
+    assert cpu_row.matched_name == "Intel Core i5-2300 @ 2.80GHz"
+    assert cpu_row.unverified is False
+
+
+TIE_DB: dict[str, Any] = {
+    "data": [
+        {
+            "id": "788",
+            "name": "Intel Core i5-2300 @ 2.80GHz",
+            "cpumark": "3420",
+            "thread": "1428",
+            "date": "Jan 2011",
+            "cat": "Desktop",
+            "cpuCount": 1,
+            "samples": "1139",
+        },
+        {
+            "id": 3594,
+            "name": "GeForce RTX 3050 Laptop GPU",
+            "g3d_mark": 11718,
+            "thread": None,
+            "tdp": 75,
+            "samples": 5000,
+        },
+        {
+            "id": 3596,
+            "name": "GeForce GTX 1060",
+            "g3d_mark": 6368,
+            "thread": None,
+            "tdp": 120,
+            "samples": 1521,
+        },
+        {
+            "id": 3595,
+            "name": "GeForce GTX 1050 Ti",
+            "g3d_mark": 6368,
+            "thread": None,
+            "tdp": 75,
+            "samples": 47737,
+        },
+    ]
+}
+
+TIE_SPEC = _system_spec(gpu="GeForce RTX 3050 Laptop GPU")
+
+
+def test_equal_score_alternatives_keep_the_first_listed_candidate() -> None:
+    report = _check(
+        TIE_DB,
+        html=_requirements_html(gpu="GeForce GTX 1060 or GeForce GTX 1050 Ti"),
+        spec=TIE_SPEC,
+    )
+
+    gpu_row = report.components[1]
+    assert gpu_row.matched_name == "GeForce GTX 1060"
+    assert gpu_row.ratio == pytest.approx(11718.0 / 6368.0)
+    assert gpu_row.unverified is False
+
+
+ORDER_DB: dict[str, Any] = {
+    "data": [
+        *TIE_DB["data"][:2],
+        {
+            "id": 3596,
+            "name": "GeForce GTX 1060",
+            "g3d_mark": 7904,
+            "thread": None,
+            "tdp": 120,
+            "samples": 1521,
+        },
+        TIE_DB["data"][3],
+    ]
+}
+
+
+def test_distinct_score_selection_ignores_candidate_order() -> None:
+    forward = _check(
+        ORDER_DB,
+        html=_requirements_html(gpu="GeForce GTX 1050 Ti or GeForce GTX 1060"),
+        spec=TIE_SPEC,
+    )
+    reversed_order = _check(
+        ORDER_DB,
+        html=_requirements_html(gpu="GeForce GTX 1060 or GeForce GTX 1050 Ti"),
+        spec=TIE_SPEC,
+    )
+
+    assert forward.components[1].matched_name == "GeForce GTX 1050 Ti"
+    assert forward.components[1].ratio == pytest.approx(11718.0 / 6368.0)
+    assert reversed_order.components[1].matched_name == "GeForce GTX 1050 Ti"
+    assert reversed_order.components[1].ratio == pytest.approx(11718.0 / 6368.0)
+
+
+def test_scored_best_guess_alternative_is_usable(
+    benchmark_db: dict[str, Any],
+) -> None:
+    # The FX-6300 probe is a below-gate best_guess (confidence < 0.80) with a
+    # released score, so it is usable and wins over the exact Xeon row (8500).
+    report = _check(
+        benchmark_db,
+        html=_requirements_html(cpu="AMD FX-6300 Six-Core or Intel Xeon E5-2670"),
+    )
+
+    cpu_row = report.components[0]
+    assert cpu_row.required_value == "AMD FX-6300 Six-Core or Intel Xeon E5-2670"
+    assert cpu_row.unverified is False
+    assert cpu_row.matched_name == "AMD FX-8350 Eight-Core @ 4.00GHz"
+    assert cpu_row.confidence is not None
+    assert cpu_row.confidence < 0.80
+    assert cpu_row.ratio == pytest.approx(9400.0 / 6300.0)

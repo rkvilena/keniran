@@ -17,7 +17,7 @@ import json
 from collections.abc import Callable, Mapping, Sequence
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Final
+from typing import Any, Final, Literal
 
 from keniran.adapters import benchmarks, hardware, steam
 from keniran.core import requirements_parser, scoring
@@ -80,15 +80,15 @@ def check_game(
 
     user_cpu = benchmarks.lookup(cpu_database, system_spec.cpu_name, kind="cpu")
     user_gpu = benchmarks.lookup(gpu_database, system_spec.gpu_name, kind="gpu")
-    target_cpu = (
-        benchmarks.lookup(cpu_database, requirements.cpu_name, kind="cpu")
-        if requirements.cpu_name is not None
-        else None
+    target_cpu = _select_target_match(
+        cpu_database,
+        requirements_parser.split_alternatives(requirements.cpu_name or ""),
+        kind="cpu",
     )
-    target_gpu = (
-        benchmarks.lookup(gpu_database, requirements.gpu_name, kind="gpu")
-        if requirements.gpu_name is not None
-        else None
+    target_gpu = _select_target_match(
+        gpu_database,
+        requirements_parser.split_alternatives(requirements.gpu_name or ""),
+        kind="gpu",
     )
 
     cpu_row, cpu_ratio = _benchmark_row(
@@ -140,6 +140,36 @@ def check_game(
         components=[cpu_row, gpu_row, ram_row, vram_row, storage_row],
         verdict=verdict,
     )
+
+
+def _select_target_match(
+    database: BenchmarkDatabase,
+    candidates: Sequence[str],
+    *,
+    kind: Literal["cpu", "gpu"],
+) -> MatchResult | None:
+    """Return the usable match with the lowest positive score (meet-any).
+
+    A published ``A or B`` requirement is satisfied by *any* listed component,
+    so every alternative is looked up independently and the least demanding
+    (lowest positive ``best_entry.score``) usable match wins. A scored
+    ``best_guess`` stays usable per the v0.2.1 policy; ``none``/``unverified``
+    matches and matches whose score is absent or non-positive are ignored.
+    Candidates are scanned in listed order and the incumbent is replaced only
+    on a strictly lower score, so ties keep the first listed candidate.
+    ``None`` means nothing was usable and the row keeps its unverified form.
+    """
+    selected: MatchResult | None = None
+    selected_score: float | None = None
+    for candidate in candidates:
+        match = benchmarks.lookup(database, candidate, kind=kind)
+        score = _match_score(match)
+        if score is None or score <= 0:
+            continue
+        if selected_score is None or score < selected_score:
+            selected = match
+            selected_score = score
+    return selected
 
 
 def _benchmark_row(
