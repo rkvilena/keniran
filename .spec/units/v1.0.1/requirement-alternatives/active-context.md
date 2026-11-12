@@ -7,11 +7,11 @@ RESOLVE — RESOLVED (user decision 2026-11-12): `split_alternatives("or better"
 ("v1.0.1 run ruling"). The ruled behavior is already what the uncommitted ALT-001 code
 implements; the ruling is pinned by test in this unit's task work.
 
-- current task: ALT-001 → **done (commit e7b219c)** after the spec-owner ruling
-  (`.spec/decisions.md` "v1.0.1 run ruling": all-qualifier residue stays a single
-  candidate, e.g. `"or better"` → `("better",)`). ALT-002 done (c63b69c). Both
-  dependencies of ALT-003 are now satisfied → next task: ALT-003 (meet-any scoring +
-  FC27 regression).
+- current task: ALT-003 → **done (commit e0c1edc)**. UNIT COMPLETE: ALT-001 (e7b219c),
+  ALT-002 (c63b69c), ALT-003 (e0c1edc) — all verified PASS. The meet-any reduction lives
+  in `_select_target_match` (fan-out over `split_alternatives`, lowest positive
+  `best_entry.score`, ties keep first listed). 26 check_game tests pass; full gate 297
+  passed. This unblocks the release chores (both feature units now complete).
 - state: vendor-alias normalization landed — NVIDIA≡GeForce → canonical `geforce`,
   AMD≡Radeon → canonical `amd`, token-level via `_TOKEN_RE` with a presence guard, applied
   inside `normalize_name` so probe and DB rows share the key space. Gate/ladder/score

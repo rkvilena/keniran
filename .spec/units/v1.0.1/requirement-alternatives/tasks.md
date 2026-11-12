@@ -40,7 +40,7 @@
   out-of-scope: requirement parsing, OR reduction, confidence-policy changes, network/database refresh
   status: done (commit c63b69c)
 
-- [ ] ALT-003: Score OR alternatives using meet-any semantics
+- [x] ALT-003: Score OR alternatives using meet-any semantics
   depends: ALT-001, ALT-002
   files: src/keniran/services/check_game.py, tests/test_check_game.py
   pattern: `check_game`, `_benchmark_row`, `_single_thread_ratio` in src/keniran/services/check_game.py; offline `_check` helpers in tests/test_check_game.py
@@ -63,4 +63,4 @@
       python -m pytest tests/test_check_game.py -q
       python -m ruff format . && python -m ruff check . && python -m mypy && python -m pytest -q
   out-of-scope: Report/GameRequirements schema changes, verdict confidence policy, RAM/VRAM/storage scoring
-  status: blocked: depends-on ALT-001
+  status: done (commit e0c1edc)
