@@ -5,8 +5,11 @@
 `keniran <APP_ID>` audits the local machine, fetches a Steam game's minimum PC
 requirements, and prints a per-component comparison with a bottom-line verdict.
 
-This README documents **1.0.0**. (1.0.0 adds the Textual TUI via `keniran tui`;
-the one-shot CLI is unchanged.)
+This README documents **1.0.1**, the intended first public release. The
+0.1.0–1.0.0 era was private, unpublished local development; 1.0.1 is the first
+version meant to be published. It refreshes the TUI home screen (via
+`keniran tui`) and corrects how `or`-joined requirements are matched. The
+one-shot `keniran <APP_ID>` CLI is unchanged.
 
 ## Install
 
@@ -34,11 +37,18 @@ keniran <APP_ID>
 `generated/system_spec.json`; later runs reuse the cache. Pass
 `--refresh-spec` to force a fresh audit.
 
-## TUI (1.0.0)
+## TUI (1.0.1)
 
 `keniran tui` launches a terminal UI that renders the same `Report` as the
 one-shot CLI. `keniran <APP_ID>` is unchanged and remains the default — the TUI
 is an alternative front end, not a replacement.
+
+The home screen is a branded launch pad: a small `Keniran` header, a large
+`keniran` wordmark, the tagline "Check whether your PC can run a Steam game.",
+and the App ID field plus **Run** button grouped in a bordered command box. The
+palette is a dark slate/navy base with a muted lavender highlight and a
+restrained warm accent. The home and results views scroll vertically, so short
+terminals are not clipped.
 
 Type a Steam App ID and press **Run**. The check runs in a background worker, so
 the UI stays responsive; while it runs, a status line names the app id, then the
@@ -61,14 +71,30 @@ Textual's command palette: press `Ctrl+P`, then choose **Theme** (or type a
 theme name such as `tokyo-night`).
 
 The TUI accepts an App ID only — there is no title search box. Title search
-(`--search`) remains deferred (plan/decisions.md §9), with a TUI `Input` widget
-as its natural future home.
+(`--search`) remains deferred, with a TUI `Input` widget as its natural future
+home.
 
 ## Reading the report
 
 Each component is compared by ratio (yours ÷ required); the verdict is the
 worst verified component. A row marked `unverified ⚠` means keniran couldn't
 confirm that value and it's excluded from the verdict — keniran never guesses.
+
+## How requirements are matched
+
+A CPU or GPU requirement joined by `or` (for example `AMD RX 570 or Nvidia GTX
+1050 Ti`) is a list of alternatives, not one name: keniran matches each
+candidate independently and scores the **least demanding alternative that
+resolves**, because your machine only has to meet one of them (meet-any). The
+requirement column still shows the full original string, next to the benchmark
+that was actually selected and its confidence badge. If no alternative resolves,
+the row degrades to `unverified ⚠` as usual.
+
+Vendor names are normalized to their GPU family on both the requirement and the
+benchmark-database side before matching: NVIDIA ≡ GeForce and AMD ≡ Radeon.
+
+This is what fixed the FC27 false negative: `keniran 4080220` now reports
+**Pass** instead of the earlier wrong result.
 
 ## Requirements & limitations
 
