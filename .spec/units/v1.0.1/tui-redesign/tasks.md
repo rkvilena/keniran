@@ -1,6 +1,6 @@
 # Tasks — v1.0.1/tui-redesign
 
-- [ ] TUIX-001: Add the Keniran branded home hierarchy and reference-inspired styling
+- [x] TUIX-001: Add the Keniran branded home hierarchy and reference-inspired styling
   depends: -
   files: src/keniran/tui/app.py, tests/test_tui.py
   pattern: `KeniranTui.compose()` / `CSS` in src/keniran/tui/app.py; shell pilot test in tests/test_tui.py
@@ -17,8 +17,9 @@
       python -m pytest tests/test_tui.py -q
       python -m ruff format . && python -m ruff check . && python -m mypy && python -m pytest -q
   out-of-scope: matching/scoring changes, shared report-renderable redesign, search/history, theme persistence
+  status: done (commit cb4ce93)
 
-- [ ] TUIX-002: Keep the home and results usable at short terminal heights
+- [x] TUIX-002: Keep the home and results usable at short terminal heights
   depends: TUIX-001
   files: src/keniran/tui/app.py, tests/test_tui.py
   pattern: current `KeniranTui.compose()` / `CSS` in src/keniran/tui/app.py; pilot helpers in tests/test_tui.py
@@ -34,3 +35,4 @@
       python -m pytest tests/test_tui.py -q
       python -m ruff format . && python -m ruff check . && python -m mypy && python -m pytest -q
   out-of-scope: new commands/controls, report rendering changes, custom persistent theme, new dependencies
+  status: done (commit b4efff2)

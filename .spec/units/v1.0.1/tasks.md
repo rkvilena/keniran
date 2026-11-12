@@ -12,6 +12,7 @@
     acceptance commands:
       python -m pytest -q
   out-of-scope: feature code, changelog, README/plan edits, tag creation
+  status: blocked: pending-feature (v1.0.1/requirement-alternatives incomplete: ALT-001 blocked: failed-review; ALT-003 blocked: depends-on ALT-001)
 
 - [ ] REL101-002: Add concise 1.0.1 changelog entry
   depends: -
@@ -26,6 +27,7 @@
     acceptance commands:
       python -m pytest -q
   out-of-scope: version bump, README or plan/decisions edits, release tag
+  status: blocked: pending-feature (v1.0.1/requirement-alternatives incomplete: ALT-001 blocked: failed-review; ALT-003 blocked: depends-on ALT-001)
 
 - [ ] REL101-003: Docs sweep — README + canonical plan decisions
   depends: -
@@ -44,6 +46,7 @@
     acceptance commands:
       python -m pytest -q
   out-of-scope: global `.spec/spec.md` edits; feature implementation; changelog; tag
+  status: blocked: pending-feature (v1.0.1/requirement-alternatives incomplete: ALT-001 blocked: failed-review; ALT-003 blocked: depends-on ALT-001)
 
 - [ ] REL101-004: Full v1.0.1 acceptance run
   depends: REL101-001, REL101-002, REL101-003
@@ -66,6 +69,7 @@
       keniran --version
       keniran tui
   out-of-scope: code fixes, documentation edits, tag creation
+  status: blocked: pending-feature (v1.0.1/requirement-alternatives incomplete: ALT-001 blocked: failed-review; ALT-003 blocked: depends-on ALT-001)
 
 - [ ] REL101-005: Create annotated v1.0.1 tag
   depends: REL101-004
@@ -81,3 +85,4 @@
       git tag -a v1.0.1 -m "Keniran v1.0.1"
       git show-ref --verify refs/tags/v1.0.1
   out-of-scope: pushing the tag or publishing a GitHub release (user-controlled action)
+  status: blocked: pending-feature (v1.0.1/requirement-alternatives incomplete: ALT-001 blocked: failed-review; ALT-003 blocked: depends-on ALT-001)

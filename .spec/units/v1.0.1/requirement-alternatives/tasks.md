@@ -19,8 +19,9 @@
       python -m pytest tests/test_requirements_parser.py -q
       python -m ruff format . && python -m ruff check . && python -m mypy && python -m pytest -q
   out-of-scope: benchmark aliasing, service scoring, new model fields, comma/slash alternatives
+  status: blocked: failed-review (verify cycle 3; all acceptance commands green; open qualifier-edge dispute — see active-context.md)
 
-- [ ] ALT-002: Normalize common GPU vendor aliases for benchmark lookup
+- [x] ALT-002: Normalize common GPU vendor aliases for benchmark lookup
   depends: -
   files: src/keniran/adapters/benchmarks.py, tests/test_benchmark_lookup.py
   pattern: `normalize_name` / `_apply_aliases` in src/keniran/adapters/benchmarks.py; stage-zero tests in tests/test_benchmark_lookup.py
@@ -37,6 +38,7 @@
       python -m pytest tests/test_benchmark_lookup.py -q
       python -m ruff format . && python -m ruff check . && python -m mypy && python -m pytest -q
   out-of-scope: requirement parsing, OR reduction, confidence-policy changes, network/database refresh
+  status: done (commit c63b69c)
 
 - [ ] ALT-003: Score OR alternatives using meet-any semantics
   depends: ALT-001, ALT-002
@@ -61,3 +63,4 @@
       python -m pytest tests/test_check_game.py -q
       python -m ruff format . && python -m ruff check . && python -m mypy && python -m pytest -q
   out-of-scope: Report/GameRequirements schema changes, verdict confidence policy, RAM/VRAM/storage scoring
+  status: blocked: depends-on ALT-001
