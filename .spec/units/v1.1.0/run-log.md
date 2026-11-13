@@ -1,0 +1,6 @@
+# Run log — v1.1.0
+
+2026-11-13T16:21+0700 | REL110-005 | gate: python -m ruff format . && python -m ruff check . && python -m mypy && python -m pytest -q | result: ruff format → `94 files left unchanged`; ruff check → `All checks passed!`; mypy → `Success: no issues found in 19 source files`; pytest → `325 passed in 14.03s` (gate green, working tree unchanged by format)
+2026-11-13T16:21+0700 | REL110-002 | pip install -e ".[dev]" ; keniran --version | result: `Successfully uninstalled keniran-1.0.0` / `Successfully installed keniran-1.1.0`; `keniran --version` → `keniran 1.1.0`
+2026-11-13T16:21+0700 | REL110-005 | per-task acceptance commands (re-verified at acceptance): pytest tests/test_branding.py -q → `16 passed`; pytest tests/test_theme.py -q → `8 passed`; pytest tests/test_tui.py -q → `26 passed` | result: all green
+2026-11-13T16:21+0700 | REL110-005 | headless TUI smoke (run_test) | result: hero on mount (wordmark + exact subtitle, input first focus), Enter runs the check (type id + Enter → worker starts, hero hidden, results mounted), Esc and Reset each restore the hero and clear input + results, theme `keniran` with `tokyo-night` still available; check_game fake called for ids [72850, 420]; interactive `keniran tui` smoke PENDING USER QA
