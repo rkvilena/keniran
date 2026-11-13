@@ -1,0 +1,13 @@
+{
+  "plan": "v1.1.0-tui-redesign",
+  "workstream": "ws-changelog",
+  "kind": "task",
+  "path": "E:/MyProject/test-project/.opencode/blueprint/wt/v1.1.0-tui-redesign-ws-changelog",
+  "branch": "blueprint/v1.1.0-tui-redesign/ws-changelog",
+  "based_on": "blueprint/v1.1.0-tui-redesign/_plan",
+  "tasks": ["W6-2"],
+  "created_at": "2026-11-13T16:20:00+01:00",
+  "status": "merged",
+  "commit": "4cc7422",
+  "merged_into": "blueprint/v1.1.0-tui-redesign/_plan"
+}

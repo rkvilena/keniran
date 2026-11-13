@@ -1,0 +1,16 @@
+{
+  "plan": "v1.1.0-tui-redesign",
+  "kind": "plan-integration",
+  "path": "E:/MyProject/test-project/.opencode/blueprint/wt/v1.1.0-tui-redesign",
+  "branch": "blueprint/v1.1.0-tui-redesign/_plan",
+  "base_branch": "main",
+  "base_sha": "f79f6db9facc10835d6481fdedd5e6616d3c6744",
+  "base_sha_short": "f79f6db",
+  "created_at": "2026-11-13T15:22:00+01:00",
+  "status": "merged",
+  "merged_into": "main",
+  "merge_sha": "adcaacf",
+  "worktree_removed": true,
+  "branch_deleted": true,
+  "completed_at": "2026-11-13T16:35:00+01:00"
+}

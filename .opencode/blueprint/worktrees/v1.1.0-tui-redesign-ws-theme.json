@@ -1,0 +1,13 @@
+{
+  "plan": "v1.1.0-tui-redesign",
+  "workstream": "ws-theme",
+  "kind": "task",
+  "path": "E:/MyProject/test-project/.opencode/blueprint/wt/v1.1.0-tui-redesign-ws-theme",
+  "branch": "blueprint/v1.1.0-tui-redesign/ws-theme",
+  "based_on": "blueprint/v1.1.0-tui-redesign/_plan",
+  "tasks": ["W1-2"],
+  "created_at": "2026-11-13T15:23:00+01:00",
+  "status": "merged",
+  "commit": "a653470",
+  "merged_into": "blueprint/v1.1.0-tui-redesign/_plan"
+}
