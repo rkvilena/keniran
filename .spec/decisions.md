@@ -265,3 +265,33 @@ Append-only. Newest first within each release block. Every entry inherits the ru
   "non-empty input without a disjunction ⇒ single candidate" invariant. The third-cycle
   verifier finding demanding `()` for `"or better"` is superseded by this ruling.
   (source: user decision 2026-11-12, answering the RESOLVE entry)
+
+## v1.1.0 opencode-TUI direction (2026-11-13)
+
+- **TUI visual direction (v1.1.0) = the opencode TUI aesthetic; the v1.0.1 Bagels
+  direction is superseded.** The `keniran tui` home screen becomes: near-black
+  background, monochrome gray content, exactly one amber accent, a centered
+  multi-line ASCII-art `keniran` wordmark with a left→right gray gradient, and a
+  small muted subtitle ("Can I run it? Enter the target game's Steam App ID to audit
+  this PC."). Enter submits (the Run button is removed); results replace the hero;
+  a Reset/Esc path returns to the hero. This explicitly supersedes the v1.0.1 entry
+  at `.spec/decisions.md:230-235` — "**TUI visual direction:** dark slate/navy base,
+  muted lavender primary highlight, restrained warm accent; clear Keniran
+  title/header, large `keniran` wordmark and short compatibility tagline, existing
+  App ID/Run controls as the primary command box, and vertical scrolling for short
+  terminal heights" (2026-11-12). (source: user decision / approved plan
+  v1.1.0-tui-redesign, 2026-11-13)
+- **Custom `keniran` theme is now the TUI default; supersedes the backlog note at
+  `.spec/decisions.md:46-49`.** The 2026-11-11 entry set `tokyo-night` as default and
+  parked a custom "keniran" verdict-colored theme plus `--theme` persistence as
+  backlog; v1.1.0 registers a `keniran` theme implementing the opencode palette and
+  makes it the TUI default. Reversibility stays: `tokyo-night` remains selectable and
+  runtime theme switching (Ctrl+P command palette) stays enabled; `--theme`
+  persistence remains out of scope. (source: user decision / approved plan
+  v1.1.0-tui-redesign, 2026-11-13)
+- **v1.1.0 release shape:** a TUI-only visual redesign plus release chores, run as a
+  flat single release unit (`unit-id: v1.1.0`; feature tasks prefix `TUI11`, release
+  chores prefix `REL110`; spec `.spec/units/v1.1.0/spec.md`). Pipeline, `Report`
+  models, shared renderables, the one-shot `keniran <APP_ID>` CLI and its dispatch,
+  and error semantics are untouched; no new dependencies; `pyproject.toml` version
+  target `1.1.0`. (source: approved plan v1.1.0-tui-redesign, 2026-11-13)
