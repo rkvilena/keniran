@@ -5,11 +5,12 @@
 `keniran <APP_ID>` audits the local machine, fetches a Steam game's minimum PC
 requirements, and prints a per-component comparison with a bottom-line verdict.
 
-This README documents **1.0.1**, the intended first public release. The
-0.1.0–1.0.0 era was private, unpublished local development; 1.0.1 is the first
-version meant to be published. It refreshes the TUI home screen (via
-`keniran tui`) and corrects how `or`-joined requirements are matched. The
-one-shot `keniran <APP_ID>` CLI is unchanged.
+This README documents **1.1.0**, a TUI-only visual redesign. It reworks the
+`keniran tui` home screen around a near-black monochrome base with a single
+amber accent: a centered ASCII-art `keniran` wordmark, Enter-to-submit, and
+results that replace the hero. The audit pipeline, the one-shot
+`keniran <APP_ID>` CLI, and how `or`-joined requirements are matched are
+unchanged.
 
 ## Install
 
@@ -37,22 +38,26 @@ keniran <APP_ID>
 `generated/system_spec.json`; later runs reuse the cache. Pass
 `--refresh-spec` to force a fresh audit.
 
-## TUI (1.0.1)
+## TUI (1.1.0)
 
 `keniran tui` launches a terminal UI that renders the same `Report` as the
 one-shot CLI. `keniran <APP_ID>` is unchanged and remains the default — the TUI
 is an alternative front end, not a replacement.
 
-The home screen is a branded launch pad: a small `Keniran` header, a large
-`keniran` wordmark, the tagline "Check whether your PC can run a Steam game.",
-and the App ID field plus **Run** button grouped in a bordered command box. The
-palette is a dark slate/navy base with a muted lavender highlight and a
-restrained warm accent. The home and results views scroll vertically, so short
-terminals are not clipped.
+The home screen is a centered brand hero: the ASCII-art `keniran` wordmark
+shaded in a left→right gray gradient, with a small muted subtitle beneath it —
+"Can I run it? Enter the target game's Steam App ID to audit this PC." — above
+the App ID input and its **Reset** button, grouped in one bordered command box.
+A terminal too small for the full six-row wordmark gets a compact four-row
+fallback instead, re-applied on resize. The palette is a near-black gray
+monochrome with exactly one amber accent (the default theme is `keniran`), and
+the home block and results share one vertically scrollable body, so short
+terminals scroll long content into view instead of clipping it.
 
-Type a Steam App ID and press **Run**. The check runs in a background worker, so
-the UI stays responsive; while it runs, a status line names the app id, then the
-results area shows:
+Type a Steam App ID and press **Enter** to submit. The check runs in a
+background worker, so the UI stays responsive; while it runs, a status line
+names the app id. Results replace the hero: as soon as a status line, a report,
+or an error is mounted, the hero steps aside and the results area shows:
 
 - the per-component verdict table (required vs your system, result, notes);
 - `unverified ⚠` rows, which are excluded from the verdict rather than guessed;
@@ -64,11 +69,15 @@ results area shows:
 
 Errors — an invalid App ID, a Steam lookup failure, or an unexpected exception —
 are shown inline in bold red instead of crashing the app; fix the input and
-press Run again in the same session.
+press Enter again in the same session.
 
-The default theme is `tokyo-night`. Themes are runtime-swappable through
-Textual's command palette: press `Ctrl+P`, then choose **Theme** (or type a
-theme name such as `tokyo-night`).
+**Reset** (the button beside the input) or **Esc** anywhere returns to the home
+screen: the hero reappears, and the App ID input and the results are cleared,
+ready for the next check.
+
+Themes are runtime-swappable through Textual's command palette: press `Ctrl+P`,
+then choose **Theme** — the built-ins, including `tokyo-night`, remain
+selectable.
 
 The TUI accepts an App ID only — there is no title search box. Title search
 (`--search`) remains deferred, with a TUI `Input` widget as its natural future
