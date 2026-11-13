@@ -221,7 +221,7 @@ def test_home_screen_shows_the_keniran_brand_block() -> None:
             home = tui.query_one("#home")
             hero = tui.query_one(f"#{HERO_ID}", Container)
             wordmark = tui.query_one(f"#{WORDMARK_ID}", Static)
-            rule = tui.query_one("#keniran-rule", Rule)
+            rule = tui.query_one("#keniran-rule", Static)
             subtitle = tui.query_one(f"#{SUBTITLE_ID}", Static)
             # The hero is nested inside #home, and the command box is its sibling.
             assert hero in list(home.children)
@@ -384,7 +384,7 @@ def test_home_hierarchy_fits_at_the_normal_terminal_size() -> None:
 
             hero = tui.query_one(f"#{HERO_ID}", Container)
             wordmark = tui.query_one(f"#{WORDMARK_ID}", Static)
-            rule = tui.query_one("#keniran-rule", Rule)
+            rule = tui.query_one("#keniran-rule", Static)
             subtitle = tui.query_one(f"#{SUBTITLE_ID}", Static)
             box = tui.query_one(f"#{COMMAND_BOX_ID}", Container)
             results = tui.query_one(f"#{RESULTS_ID}", Container)

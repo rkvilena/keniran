@@ -100,7 +100,8 @@ class KeniranTui(App[None]):
     # bindings (Ctrl+P palette, Ctrl+Q quit) merge with these.
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("escape", "reset", "Reset", show=True),
-        Binding("ctrl+p", "command_palette", "Menu"),
+        Binding("ctrl+p", "command_palette", "Menu", show=True),
+        Binding("ctrl+q", "quit", "Quit", show=False),
     ]
 
     CSS = """
@@ -215,7 +216,7 @@ class KeniranTui(App[None]):
                 # (full art or the compact fallback) that fits the terminal.
                 with Container(id=HERO_ID, classes="hero"):
                     yield Static("", id=WORDMARK_ID, classes="brand-wordmark")
-                    yield Rule(id="keniran-rule", line_character="┄")
+                    yield Static("┄" * 40, id="keniran-rule")
                     yield Static(SUBTITLE, id=SUBTITLE_ID, classes="brand-subtitle")
                 with (
                     Container(id=COMMAND_BOX_ID, classes="command-box"),
