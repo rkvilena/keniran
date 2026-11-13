@@ -365,8 +365,11 @@ def test_keniran_theme_is_selected_and_repaints_when_switched() -> None:
             assert wordmark.styles.color.hex == variables["primary"]
 
             # R8: Ctrl+P keeps the command palette (and its theme switcher).
+            # The binding label is now "Menu" instead of "Palette".
             assert KeniranTui.ENABLE_COMMAND_PALETTE is True
             assert KeniranTui.COMMAND_PALETTE_BINDING == "ctrl+p"
+            menu_binding = next(b for b in tui.BINDINGS if b.key == "ctrl+p")
+            assert menu_binding.description == "Menu"
 
     _run(scenario())
 
@@ -825,7 +828,7 @@ def test_results_replace_the_hero_and_reset_restores_the_home_screen(
 
             # A completed check hides the hero without unmounting it: the
             # results take over its space and the command box slides up into
-            # the hero's former position.
+            # the hero's former position (offset by its top margin).
             app_id_input.value = str(APP_ID)
             await _submit(tui, pilot)
             await _wait_for_check(tui, pilot)
@@ -835,7 +838,7 @@ def test_results_replace_the_hero_and_reset_restores_the_home_screen(
             assert hero in list(home.children)
             await _wait_until(lambda: hero.region.height == 0, pilot)
             assert len(results.children) > 0
-            await _wait_until(lambda: box.region.y == hero_top, pilot)
+            await _wait_until(lambda: box.region.y == hero_top + box.styles.margin.top, pilot)
             # The command box (and the input in it) stays visible throughout.
             assert box.region.height > 0
             assert app_id_input.region.width > 0

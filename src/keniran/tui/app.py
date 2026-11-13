@@ -98,7 +98,10 @@ class KeniranTui(App[None]):
     # Esc is the keyboard twin of the Reset button (R12): both restore the
     # home screen, so the reset is always one keystroke away. The base App
     # bindings (Ctrl+P palette, Ctrl+Q quit) merge with these.
-    BINDINGS: ClassVar[list[BindingType]] = [Binding("escape", "reset", "Reset", show=True)]
+    BINDINGS: ClassVar[list[BindingType]] = [
+        Binding("escape", "reset", "Reset", show=True),
+        Binding("ctrl+p", "command_palette", "Menu"),
+    ]
 
     CSS = """
     Screen {
