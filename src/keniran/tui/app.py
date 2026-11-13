@@ -114,6 +114,7 @@ class KeniranTui(App[None]):
         height: auto;
         width: 1fr;
         padding: 1 2 0 2;
+        align-horizontal: center;
     }
 
     #hero {
@@ -151,7 +152,8 @@ class KeniranTui(App[None]):
         border: round $panel;
         background: $surface;
         height: auto;
-        width: 1fr;
+        width: 80;
+        margin-top: 1;
         padding: 0 1;
     }
 

@@ -267,6 +267,13 @@ def test_app_id_control_is_grouped_in_the_command_box() -> None:
             assert border_color.hex == tui.get_css_variables()["panel"]
             assert box.styles.background.hex == tui.get_css_variables()["surface"]
 
+            # Layout constraints: width 80 and centered.
+            assert box.styles.width.value == 80
+            assert box.styles.margin.top == 1
+            assert box.styles.margin.bottom == 0
+            # Centering is handled by #home's align-horizontal: center
+            assert tui.query_one("#home").styles.align_horizontal == "center"
+
             # Both controls keep a real, visible region inside the box.
             assert app_id_input.region.width > 0
             assert reset_button.region.width > 0
