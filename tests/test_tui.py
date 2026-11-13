@@ -24,7 +24,7 @@ import pytest
 from rich.table import Table
 from rich.text import Text
 from textual.app import App
-from textual.containers import Container, VerticalScroll
+from textual.containers import Center, Container, VerticalScroll
 from textual.pilot import Pilot
 from textual.widgets import Button, Footer, Input, Rule, Static
 from textual.worker import WorkerFailed
@@ -47,12 +47,14 @@ from keniran.tui import branding
 from keniran.tui.app import (
     APP_ID_INPUT_ID,
     BODY_ID,
+    COMMAND_BOX_CENTER_ID,
     COMMAND_BOX_ID,
     ERROR_ID,
     ERROR_STYLE,
     HERO_ID,
     RESET_BUTTON_ID,
     RESULTS_ID,
+    RULE_CENTER_ID,
     STATUS_ID,
     SUBTITLE,
     SUBTITLE_ID,
@@ -221,13 +223,18 @@ def test_home_screen_shows_the_keniran_brand_block() -> None:
             home = tui.query_one("#home")
             hero = tui.query_one(f"#{HERO_ID}", Container)
             wordmark = tui.query_one(f"#{WORDMARK_ID}", Static)
-            rule = tui.query_one("#keniran-rule", Static)
+            rule_center = tui.query_one(f"#{RULE_CENTER_ID}", Center)
+            rule = tui.query_one("#keniran-rule", Rule)
             subtitle = tui.query_one(f"#{SUBTITLE_ID}", Static)
-            # The hero is nested inside #home, and the command box is its sibling.
+            # The hero and centered command-box wrapper are siblings in #home.
             assert hero in list(home.children)
             box = tui.query_one(f"#{COMMAND_BOX_ID}", Container)
-            assert box in list(home.children)
+            box_center = tui.query_one(f"#{COMMAND_BOX_CENTER_ID}", Center)
+            assert box_center in list(home.children)
+            assert box in list(box_center.children)
             assert box not in list(hero.children)
+            assert rule_center in list(hero.children)
+            assert rule in list(rule_center.children)
 
             # The wordmark is the ASCII art (the default 80x24 terminal shows
             # the full six-row variant).
@@ -244,6 +251,9 @@ def test_home_screen_shows_the_keniran_brand_block() -> None:
             # The brand block is stacked above the command box, never in #results,
             # which stays empty on mount.
             assert wordmark.region.y < rule.region.y < subtitle.region.y < box.region.y
+            assert rule.region.width == 40
+            assert rule.region.x == (hero.region.width - rule.region.width) // 2 + hero.region.x
+            assert box.region.x == (tui.size.width - box.region.width) // 2
             assert len(tui.query_one(f"#{RESULTS_ID}", Container).children) == 0
 
     _run(scenario())
@@ -254,7 +264,9 @@ def test_app_id_control_is_grouped_in_the_command_box() -> None:
         tui = KeniranTui()
         async with tui.run_test():
             box = tui.query_one(f"#{COMMAND_BOX_ID}", Container)
+            box_center = tui.query_one(f"#{COMMAND_BOX_CENTER_ID}", Center)
             assert box.has_class("command-box")
+            assert box in list(box_center.children)
 
             app_id_input = tui.query_one(f"#{APP_ID_INPUT_ID}", Input)
             reset_button = tui.query_one(f"#{RESET_BUTTON_ID}", Button)
@@ -267,16 +279,18 @@ def test_app_id_control_is_grouped_in_the_command_box() -> None:
             assert border_color.hex == tui.get_css_variables()["panel"]
             assert box.styles.background.hex == tui.get_css_variables()["surface"]
 
-            # Layout constraints: width 80 and centered.
+            # The fixed-width panel is centered as one block; its controls stay
+            # arranged from the left inside the panel.
             assert box.styles.width.value == 80
             assert box.styles.margin.top == 1
             assert box.styles.margin.bottom == 0
-            # Centering is handled by #home's align-horizontal: center
-            assert tui.query_one("#home").styles.align_horizontal == "center"
+            assert box.region.x == (tui.size.width - box.region.width) // 2
 
             # Both controls keep a real, visible region inside the box.
             assert app_id_input.region.width > 0
             assert reset_button.region.width > 0
+            assert app_id_input.region.x == box.region.x + 2
+            assert reset_button.region.x > app_id_input.region.x
 
     _run(scenario())
 
@@ -325,11 +339,14 @@ def test_branded_styles_use_textual_theme_tokens() -> None:
             assert subtitle.styles.color.a >= 0.5
             assert subtitle.styles.color.hex != variables["accent"]
 
-            # The hero is centered: its content is centered inside the hero and
-            # both children center their own text (the repo's only centering
-            # rules — there is no prior text-align/content-align rule).
+            # The hero text is centered in its full-width region; the wordmark
+            # and subtitle retain their own centered text alignment.
             hero = tui.query_one(f"#{HERO_ID}", Container)
+            rule = tui.query_one("#keniran-rule", Rule)
+            rule_center = tui.query_one(f"#{RULE_CENTER_ID}", Center)
             assert hero.styles.content_align == ("center", "middle")
+            assert rule_center.styles.align_horizontal == "center"
+            assert rule.styles.width.value == 40
             assert wordmark.styles.text_align == "center"
             assert subtitle.styles.text_align == "center"
 
@@ -384,15 +401,16 @@ def test_home_hierarchy_fits_at_the_normal_terminal_size() -> None:
 
             hero = tui.query_one(f"#{HERO_ID}", Container)
             wordmark = tui.query_one(f"#{WORDMARK_ID}", Static)
-            rule = tui.query_one("#keniran-rule", Static)
+            rule = tui.query_one("#keniran-rule", Rule)
             subtitle = tui.query_one(f"#{SUBTITLE_ID}", Static)
             box = tui.query_one(f"#{COMMAND_BOX_ID}", Container)
             results = tui.query_one(f"#{RESULTS_ID}", Container)
 
-            # The branded hierarchy survives the scroll wrapper unchanged: the
-            # hero (wordmark above subtitle) sits above the command box.
+            # The brand hero sits above the centered command box; its divider
+            # is nested in a centering wrapper of its own.
             assert wordmark in list(hero.children)
-            assert rule in list(hero.children)
+            assert tui.query_one(f"#{RULE_CENTER_ID}", Center) in list(hero.children)
+            assert rule in list(tui.query_one(f"#{RULE_CENTER_ID}", Center).children)
             assert subtitle in list(hero.children)
             assert wordmark.region.y < rule.region.y < subtitle.region.y < box.region.y
             assert results.region.y >= box.region.bottom

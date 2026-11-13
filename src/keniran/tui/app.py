@@ -54,7 +54,7 @@ from rich.text import Text
 from textual import events
 from textual.app import App, ComposeResult
 from textual.binding import Binding, BindingType
-from textual.containers import Container, Horizontal, Vertical, VerticalScroll
+from textual.containers import Center, Container, Horizontal, Vertical, VerticalScroll
 from textual.geometry import Size
 from textual.widgets import Button, Footer, Input, Rule, Static
 from textual.worker import Worker, WorkerState
@@ -78,6 +78,8 @@ HERO_HIDDEN_CLASS: Final = "hidden"
 WORDMARK_ID: Final = "keniran-wordmark"
 SUBTITLE_ID: Final = "keniran-subtitle"
 COMMAND_BOX_ID: Final = "command-box"
+COMMAND_BOX_CENTER_ID: Final = "command-box-center"
+RULE_CENTER_ID: Final = "keniran-rule-center"
 BODY_ID: Final = "body"
 
 SUBTITLE: Final = "Can I run it? Enter the target game's Steam App ID to audit this PC."
@@ -118,7 +120,6 @@ class KeniranTui(App[None]):
         height: auto;
         width: 1fr;
         padding: 1 2 0 2;
-        align-horizontal: center;
     }
 
     #hero {
@@ -129,7 +130,13 @@ class KeniranTui(App[None]):
 
     #keniran-rule {
         color: $text-muted;
-        margin: 0 4;
+        width: 40;
+        height: 1;
+        margin: 0;
+    }
+
+    #keniran-rule-center {
+        width: 1fr;
     }
 
     #hero.hidden {
@@ -152,11 +159,17 @@ class KeniranTui(App[None]):
         text-align: center;
     }
 
+    #command-box-center {
+        width: 1fr;
+        height: auto;
+    }
+
     #command-box {
         border: round $panel;
         background: $surface;
         height: auto;
         width: 80;
+        max-width: 100%;
         margin-top: 1;
         padding: 0 1;
     }
@@ -216,9 +229,11 @@ class KeniranTui(App[None]):
                 # (full art or the compact fallback) that fits the terminal.
                 with Container(id=HERO_ID, classes="hero"):
                     yield Static("", id=WORDMARK_ID, classes="brand-wordmark")
-                    yield Static("┄" * 40, id="keniran-rule")
+                    with Center(id=RULE_CENTER_ID):
+                        yield Rule(id="keniran-rule")
                     yield Static(SUBTITLE, id=SUBTITLE_ID, classes="brand-subtitle")
                 with (
+                    Center(id=COMMAND_BOX_CENTER_ID),
                     Container(id=COMMAND_BOX_ID, classes="command-box"),
                     Horizontal(id="app-id-row"),
                 ):
