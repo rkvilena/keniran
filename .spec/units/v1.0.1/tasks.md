@@ -29,7 +29,7 @@
   out-of-scope: version bump, README or plan/decisions edits, release tag
   status: done (commit c30f303)
 
-- [ ] REL101-003: Docs sweep — README + canonical plan decisions
+- [x] REL101-003: Docs sweep — README + canonical plan decisions
   depends: -
   gated: v1.0.1/requirement-alternatives, v1.0.1/tui-redesign
   files: README.md, plan/decisions.md
@@ -46,7 +46,7 @@
     acceptance commands:
       python -m pytest -q
   out-of-scope: global `.spec/spec.md` edits; feature implementation; changelog; tag
-  status: blocked: pending-feature (v1.0.1/requirement-alternatives incomplete: ALT-001 blocked: failed-review; ALT-003 blocked: depends-on ALT-001)
+  status: done (commit 4571f1b; plan/decisions.md amended on disk — gitignored)
 
 - [ ] REL101-004: Full v1.0.1 acceptance run
   depends: REL101-001, REL101-002, REL101-003
