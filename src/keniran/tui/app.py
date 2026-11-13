@@ -23,10 +23,12 @@ then select through the ``theme`` reactive), so the built-ins — including
 shell carries no Header chrome: the Footer with key hints stays docked under
 the scrollable body.
 
-The home screen is the branded entry point: a ``Keniran`` title, the ``keniran``
-wordmark, the approved tagline, and the App ID/Run controls grouped in one
-bordered command box. The branding is presentation only; every id, handler and
-worker contract below is unchanged.
+The home screen is the branded entry point: a centered hero holding the
+``keniran`` ASCII-art wordmark (:mod:`keniran.tui.branding`) and the subtitle,
+above the App ID/Run controls grouped in one bordered command box. The wordmark
+is the full six-row art when the terminal fits it and the compact four-row
+fallback otherwise, re-applied on mount and on every resize. The branding is
+presentation only; every id, handler and worker contract below is unchanged.
 
 The home block and the results area share one vertically scrollable body, so
 short terminal heights scroll long content into view instead of clipping it.
@@ -41,8 +43,10 @@ from functools import partial
 from typing import Final
 
 from rich.text import Text
+from textual import events
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, Vertical, VerticalScroll
+from textual.geometry import Size
 from textual.widgets import Button, Footer, Input, Static
 from textual.worker import Worker, WorkerState
 
@@ -50,6 +54,7 @@ from keniran.adapters import steam
 from keniran.core.models import Report, SystemSpec
 from keniran.rendering.report_view import report_renderables
 from keniran.services.check_game import BenchmarkDatabase, check_game
+from keniran.tui import branding
 from keniran.tui.theme import KENIRAN_THEME_NAME, register_keniran_theme
 
 APP_ID_INPUT_ID: Final = "app-id-input"
@@ -59,13 +64,19 @@ RESULTS_ID: Final = "results"
 ERROR_ID: Final = "check-error"
 ERROR_STYLE: Final = "bold red"
 
-TITLE_ID: Final = "keniran-title"
+HERO_ID: Final = "hero"
 WORDMARK_ID: Final = "keniran-wordmark"
-TAGLINE_ID: Final = "keniran-tagline"
+SUBTITLE_ID: Final = "keniran-subtitle"
 COMMAND_BOX_ID: Final = "command-box"
 BODY_ID: Final = "body"
 
-TAGLINE: Final = "Check whether your PC can run a Steam game."
+SUBTITLE: Final = "Can I run it? Enter the target game's Steam App ID to audit this PC."
+
+# The full wordmark is 38 columns wide and 6 rows tall; it is only shown on
+# terminals large enough to keep the whole home block visible without scrolling,
+# and the compact four-row fallback (32 columns, R7) is shown otherwise.
+WORDMARK_MIN_WIDTH: Final = 44
+WORDMARK_MIN_HEIGHT: Final = 22
 
 
 class KeniranTui(App[None]):
@@ -90,22 +101,26 @@ class KeniranTui(App[None]):
         padding: 1 2 0 2;
     }
 
-    #keniran-title {
-        color: $text-muted;
-        text-style: bold;
+    #hero {
         height: auto;
+        width: 1fr;
+        content-align: center middle;
     }
 
     #keniran-wordmark {
         color: $primary;
         text-style: bold;
         height: auto;
+        width: 1fr;
+        text-align: center;
         padding: 0 0 1 0;
     }
 
-    #keniran-tagline {
+    #keniran-subtitle {
         color: $text-muted;
         height: auto;
+        width: 1fr;
+        text-align: center;
     }
 
     #command-box {
@@ -167,9 +182,11 @@ class KeniranTui(App[None]):
     def compose(self) -> ComposeResult:
         with VerticalScroll(id=BODY_ID, can_focus=False):
             with Vertical(id="home"):
-                yield Static("Keniran", id=TITLE_ID, classes="brand-title")
-                yield Static("keniran", id=WORDMARK_ID, classes="brand-wordmark")
-                yield Static(TAGLINE, id=TAGLINE_ID, classes="brand-tagline")
+                # The hero starts empty: on_mount applies the wordmark variant
+                # (full art or the compact fallback) that fits the terminal.
+                with Container(id=HERO_ID, classes="hero"):
+                    yield Static("", id=WORDMARK_ID, classes="brand-wordmark")
+                    yield Static(SUBTITLE, id=SUBTITLE_ID, classes="brand-subtitle")
                 with (
                     Container(id=COMMAND_BOX_ID, classes="command-box"),
                     Horizontal(id="app-id-row"),
@@ -182,6 +199,37 @@ class KeniranTui(App[None]):
                     yield Button("Run", id=RUN_BUTTON_ID, variant="primary")
             yield Container(id=RESULTS_ID)
         yield Footer()
+
+    def on_mount(self) -> None:
+        """Fill the wordmark once the app and the terminal size are known."""
+        self._apply_wordmark(self.size)
+
+    def on_resize(self, event: events.Resize) -> None:
+        """Re-apply the wordmark whenever the terminal is resized."""
+        self._apply_wordmark(event.size)
+
+    def _apply_wordmark(self, size: Size) -> None:
+        """Show the full or compact wordmark variant that fits *size*.
+
+        The full six-row art (38 columns) is shown only when the terminal is
+        large enough to keep the whole home block visible without scrolling;
+        every other size gets the compact four-row fallback (R7). Resize
+        events can arrive before the widgets exist, so the update is skipped
+        until the wordmark is mounted.
+        """
+        if not self.screen_stack or not self.query(f"#{WORDMARK_ID}"):
+            return
+        if size.width >= WORDMARK_MIN_WIDTH and size.height >= WORDMARK_MIN_HEIGHT:
+            art = branding.wordmark_renderable(
+                branding.WORDMARK_GRAY_START, branding.WORDMARK_GRAY_END
+            )
+        else:
+            art = branding.wordmark_renderable_for(
+                branding.WORDMARK_COMPACT,
+                branding.WORDMARK_GRAY_START,
+                branding.WORDMARK_GRAY_END,
+            )
+        self.query_one(f"#{WORDMARK_ID}", Static).update(art)
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle the Run button."""

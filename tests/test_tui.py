@@ -43,18 +43,19 @@ from keniran.rendering.report_view import (
     badge_text,
     report_renderables,
 )
+from keniran.tui import branding
 from keniran.tui.app import (
     APP_ID_INPUT_ID,
     BODY_ID,
     COMMAND_BOX_ID,
     ERROR_ID,
     ERROR_STYLE,
+    HERO_ID,
     RESULTS_ID,
     RUN_BUTTON_ID,
     STATUS_ID,
-    TAGLINE,
-    TAGLINE_ID,
-    TITLE_ID,
+    SUBTITLE,
+    SUBTITLE_ID,
     WORDMARK_ID,
     KeniranTui,
 )
@@ -212,22 +213,32 @@ def test_app_mounts_shell_with_keniran_theme() -> None:
 def test_home_screen_shows_the_keniran_brand_block() -> None:
     async def scenario() -> None:
         tui = KeniranTui()
-        async with tui.run_test():
-            title = tui.query_one(f"#{TITLE_ID}", Static)
-            assert str(title.content).strip() == "Keniran"
+        async with tui.run_test() as pilot:
+            await pilot.pause()
 
+            home = tui.query_one("#home")
+            hero = tui.query_one(f"#{HERO_ID}", Container)
+            # The hero is nested inside #home, and the command box is its sibling.
+            assert hero in list(home.children)
+            box = tui.query_one(f"#{COMMAND_BOX_ID}", Container)
+            assert box in list(home.children)
+            assert box not in list(hero.children)
+
+            # The wordmark is the ASCII art (the default 80x24 terminal shows
+            # the full six-row variant).
             wordmark = tui.query_one(f"#{WORDMARK_ID}", Static)
-            assert str(wordmark.content).strip() == "keniran"
+            assert wordmark.content.plain == "\n".join(branding.WORDMARK_LINES)
             assert wordmark.has_class("brand-wordmark")
 
-            tagline = tui.query_one(f"#{TAGLINE_ID}", Static)
-            assert TAGLINE == "Check whether your PC can run a Steam game."
-            assert str(tagline.content).strip() == TAGLINE
+            subtitle = tui.query_one(f"#{SUBTITLE_ID}", Static)
+            assert (
+                SUBTITLE == "Can I run it? Enter the target game's Steam App ID to audit this PC."
+            )
+            assert str(subtitle.content) == SUBTITLE
 
             # The brand block is stacked above the command box, never in #results,
             # which stays empty on mount.
-            box = tui.query_one(f"#{COMMAND_BOX_ID}", Container)
-            assert title.region.y < wordmark.region.y < tagline.region.y < box.region.y
+            assert wordmark.region.y < subtitle.region.y < box.region.y
             assert len(tui.query_one(f"#{RESULTS_ID}", Container).children) == 0
 
     _run(scenario())
@@ -298,9 +309,17 @@ def test_branded_styles_use_textual_theme_tokens() -> None:
             assert wordmark.styles.text_style.bold
 
             # Body copy stays on the muted text colour, never on the warm accent.
-            tagline = tui.query_one(f"#{TAGLINE_ID}", Static)
-            assert tagline.styles.color.a >= 0.5
-            assert tagline.styles.color.hex != variables["accent"]
+            subtitle = tui.query_one(f"#{SUBTITLE_ID}", Static)
+            assert subtitle.styles.color.a >= 0.5
+            assert subtitle.styles.color.hex != variables["accent"]
+
+            # The hero is centered: its content is centered inside the hero and
+            # both children center their own text (the repo's only centering
+            # rules — there is no prior text-align/content-align rule).
+            hero = tui.query_one(f"#{HERO_ID}", Container)
+            assert hero.styles.content_align == ("center", "middle")
+            assert wordmark.styles.text_align == "center"
+            assert subtitle.styles.text_align == "center"
 
     _run(scenario())
 
@@ -348,14 +367,17 @@ def test_home_hierarchy_fits_at_the_normal_terminal_size() -> None:
             assert tui.size.width == 100
             assert tui.size.height == 30
 
-            title = tui.query_one(f"#{TITLE_ID}", Static)
+            hero = tui.query_one(f"#{HERO_ID}", Container)
             wordmark = tui.query_one(f"#{WORDMARK_ID}", Static)
-            tagline = tui.query_one(f"#{TAGLINE_ID}", Static)
+            subtitle = tui.query_one(f"#{SUBTITLE_ID}", Static)
             box = tui.query_one(f"#{COMMAND_BOX_ID}", Container)
             results = tui.query_one(f"#{RESULTS_ID}", Container)
 
-            # The branded hierarchy survives the scroll wrapper unchanged.
-            assert title.region.y < wordmark.region.y < tagline.region.y < box.region.y
+            # The branded hierarchy survives the scroll wrapper unchanged: the
+            # hero (wordmark above subtitle) sits above the command box.
+            assert wordmark in list(hero.children)
+            assert subtitle in list(hero.children)
+            assert wordmark.region.y < subtitle.region.y < box.region.y
             assert results.region.y >= box.region.bottom
 
             # Everything fits inside the visible screen at the normal size.
@@ -363,6 +385,39 @@ def test_home_hierarchy_fits_at_the_normal_terminal_size() -> None:
             assert results.region.bottom <= tui.size.height
             assert results.region.height > 0
             assert len(results.children) == 0
+
+    _run(scenario())
+
+
+def test_wordmark_shows_full_art_at_a_tall_terminal() -> None:
+    """R7: a 100x30 terminal shows the full six-row wordmark art."""
+
+    async def scenario() -> None:
+        tui = KeniranTui()
+        async with tui.run_test(size=(100, 30)) as pilot:
+            await pilot.pause()
+            wordmark = tui.query_one(f"#{WORDMARK_ID}", Static)
+            assert wordmark.content.plain == "\n".join(branding.WORDMARK_LINES)
+
+    _run(scenario())
+
+
+def test_wordmark_falls_back_to_compact_art_at_a_short_terminal() -> None:
+    """R7: at 80x16 the compact art keeps the home block on-screen unscrolled."""
+
+    async def scenario() -> None:
+        tui = KeniranTui()
+        async with tui.run_test(size=(80, 16)) as pilot:
+            await pilot.pause()
+            wordmark = tui.query_one(f"#{WORDMARK_ID}", Static)
+            assert wordmark.content.plain == "\n".join(branding.WORDMARK_COMPACT)
+
+            # The compact fallback must leave the App ID input fully on-screen
+            # without scrolling the body.
+            app_id_input = tui.query_one(f"#{APP_ID_INPUT_ID}", Input)
+            assert app_id_input.region.bottom <= tui.size.height
+            body = tui.query_one(f"#{BODY_ID}", VerticalScroll)
+            assert body.scroll_offset.y == 0
 
     _run(scenario())
 
