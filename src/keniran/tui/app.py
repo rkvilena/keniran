@@ -56,7 +56,7 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding, BindingType
 from textual.containers import Container, Horizontal, Vertical, VerticalScroll
 from textual.geometry import Size
-from textual.widgets import Button, Footer, Input, Static
+from textual.widgets import Button, Footer, Input, Rule, Static
 from textual.worker import Worker, WorkerState
 
 from keniran.adapters import steam
@@ -120,6 +120,11 @@ class KeniranTui(App[None]):
         height: auto;
         width: 1fr;
         content-align: center middle;
+    }
+
+    #keniran-rule {
+        color: $text-muted;
+        margin: 0 4;
     }
 
     #hero.hidden {
@@ -205,6 +210,7 @@ class KeniranTui(App[None]):
                 # (full art or the compact fallback) that fits the terminal.
                 with Container(id=HERO_ID, classes="hero"):
                     yield Static("", id=WORDMARK_ID, classes="brand-wordmark")
+                    yield Rule(id="keniran-rule")
                     yield Static(SUBTITLE, id=SUBTITLE_ID, classes="brand-subtitle")
                 with (
                     Container(id=COMMAND_BOX_ID, classes="command-box"),

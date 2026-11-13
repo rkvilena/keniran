@@ -26,7 +26,7 @@ from rich.text import Text
 from textual.app import App
 from textual.containers import Container, VerticalScroll
 from textual.pilot import Pilot
-from textual.widgets import Button, Footer, Input, Static
+from textual.widgets import Button, Footer, Input, Rule, Static
 from textual.worker import WorkerFailed
 from typer.testing import CliRunner
 
@@ -220,6 +220,9 @@ def test_home_screen_shows_the_keniran_brand_block() -> None:
 
             home = tui.query_one("#home")
             hero = tui.query_one(f"#{HERO_ID}", Container)
+            wordmark = tui.query_one(f"#{WORDMARK_ID}", Static)
+            rule = tui.query_one("#keniran-rule", Rule)
+            subtitle = tui.query_one(f"#{SUBTITLE_ID}", Static)
             # The hero is nested inside #home, and the command box is its sibling.
             assert hero in list(home.children)
             box = tui.query_one(f"#{COMMAND_BOX_ID}", Container)
@@ -240,7 +243,7 @@ def test_home_screen_shows_the_keniran_brand_block() -> None:
 
             # The brand block is stacked above the command box, never in #results,
             # which stays empty on mount.
-            assert wordmark.region.y < subtitle.region.y < box.region.y
+            assert wordmark.region.y < rule.region.y < subtitle.region.y < box.region.y
             assert len(tui.query_one(f"#{RESULTS_ID}", Container).children) == 0
 
     _run(scenario())
@@ -371,6 +374,7 @@ def test_home_hierarchy_fits_at_the_normal_terminal_size() -> None:
 
             hero = tui.query_one(f"#{HERO_ID}", Container)
             wordmark = tui.query_one(f"#{WORDMARK_ID}", Static)
+            rule = tui.query_one("#keniran-rule", Rule)
             subtitle = tui.query_one(f"#{SUBTITLE_ID}", Static)
             box = tui.query_one(f"#{COMMAND_BOX_ID}", Container)
             results = tui.query_one(f"#{RESULTS_ID}", Container)
@@ -378,8 +382,9 @@ def test_home_hierarchy_fits_at_the_normal_terminal_size() -> None:
             # The branded hierarchy survives the scroll wrapper unchanged: the
             # hero (wordmark above subtitle) sits above the command box.
             assert wordmark in list(hero.children)
+            assert rule in list(hero.children)
             assert subtitle in list(hero.children)
-            assert wordmark.region.y < subtitle.region.y < box.region.y
+            assert wordmark.region.y < rule.region.y < subtitle.region.y < box.region.y
             assert results.region.y >= box.region.bottom
 
             # Everything fits inside the visible screen at the normal size.
