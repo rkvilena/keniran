@@ -26,7 +26,7 @@ from rich.text import Text
 from textual.app import App
 from textual.containers import Container, VerticalScroll
 from textual.pilot import Pilot
-from textual.widgets import Button, Footer, Header, Input, Static
+from textual.widgets import Button, Footer, Input, Static
 from textual.worker import WorkerFailed
 from typer.testing import CliRunner
 
@@ -58,6 +58,7 @@ from keniran.tui.app import (
     WORDMARK_ID,
     KeniranTui,
 )
+from keniran.tui.theme import KENIRAN_THEME_NAME
 
 APP_ID = 72850
 
@@ -189,15 +190,16 @@ def full_report() -> Report:
 # --- Textual shell ---------------------------------------------------------
 
 
-def test_app_mounts_shell_with_tokyo_night_theme() -> None:
+def test_app_mounts_shell_with_keniran_theme() -> None:
     async def scenario() -> None:
         tui = KeniranTui()
         async with tui.run_test():
             assert isinstance(tui, App)
-            assert tui.theme == "tokyo-night"
-            assert tui.current_theme.name == "tokyo-night"
-            assert isinstance(tui.query_one(Header), Header)
+            assert tui.theme == KENIRAN_THEME_NAME
+            assert tui.current_theme.name == KENIRAN_THEME_NAME
+            # No Header chrome: the shell is the scrollable body plus the Footer.
             assert isinstance(tui.query_one(Footer), Footer)
+            assert not list(tui.query("Header"))
             app_id_input = tui.query_one(f"#{APP_ID_INPUT_ID}", Input)
             assert app_id_input.restrict == r"[0-9]*"
             assert isinstance(tui.query_one(f"#{RUN_BUTTON_ID}", Button), Button)
@@ -270,14 +272,27 @@ def test_branded_styles_use_textual_theme_tokens() -> None:
                 "$text-muted",
             ):
                 assert token in css
-            assert tui.current_theme.name == "tokyo-night"
+            assert tui.current_theme.name == KENIRAN_THEME_NAME
 
             variables = tui.get_css_variables()
             assert variables["text"] != variables["background"]
-            assert variables["primary"] == "#BB9AF7"
-            assert variables["accent"] == "#FE9E64"
+            assert variables["primary"] == "#9A9AA0"
 
-            # The wordmark is the large lavender brand mark (bold + $primary).
+            # The declared amber is #E0A64B; Textual's ColorSystem resolves
+            # every base colour through a LAB round-trip (lighten(0)) that can
+            # shift a saturated channel by one step, so the resolved variable
+            # is #DFA64B (the old tokyo-night pin encoded the same artifact:
+            # declared #FF9E64 resolved to #FE9E64).
+            assert tui.available_themes[KENIRAN_THEME_NAME].accent == "#E0A64B"
+            assert variables["accent"] == "#DFA64B"
+
+            # Exactly one accent role: the $accent token appears only on the
+            # Run button border, which really paints the resolved amber.
+            assert KeniranTui.CSS.count("$accent") == 1
+            run_button = tui.query_one(f"#{RUN_BUTTON_ID}", Button)
+            assert run_button.styles.border_top[1].hex == variables["accent"]
+
+            # The wordmark is the large gray brand mark (bold + $primary).
             wordmark = tui.query_one(f"#{WORDMARK_ID}", Static)
             assert wordmark.styles.color.hex == variables["primary"]
             assert wordmark.styles.text_style.bold
@@ -286,6 +301,41 @@ def test_branded_styles_use_textual_theme_tokens() -> None:
             tagline = tui.query_one(f"#{TAGLINE_ID}", Static)
             assert tagline.styles.color.a >= 0.5
             assert tagline.styles.color.hex != variables["accent"]
+
+    _run(scenario())
+
+
+def test_keniran_theme_is_selected_and_repaints_when_switched() -> None:
+    """R8/R12: ``keniran`` boots by default and ``tokyo-night`` stays selectable.
+
+    Switching must actually repaint: a token-derived widget style changes with
+    the resolved theme, not just the reported name. The command palette stays
+    enabled, so Ctrl+P keeps offering the built-in theme switch.
+    """
+
+    async def scenario() -> None:
+        tui = KeniranTui()
+        async with tui.run_test() as pilot:
+            assert tui.theme == KENIRAN_THEME_NAME
+            assert tui.current_theme.name == KENIRAN_THEME_NAME
+            assert "tokyo-night" in tui.available_themes
+
+            keniran_variables = tui.get_css_variables()
+            wordmark = tui.query_one(f"#{WORDMARK_ID}", Static)
+            keniran_color = wordmark.styles.color
+
+            tui.theme = "tokyo-night"
+            await pilot.pause()
+
+            assert tui.current_theme.name == "tokyo-night"
+            variables = tui.get_css_variables()
+            assert variables["primary"] != keniran_variables["primary"]
+            assert wordmark.styles.color != keniran_color
+            assert wordmark.styles.color.hex == variables["primary"]
+
+            # R8: Ctrl+P keeps the command palette (and its theme switcher).
+            assert KeniranTui.ENABLE_COMMAND_PALETTE is True
+            assert KeniranTui.COMMAND_PALETTE_BINDING == "ctrl+p"
 
     _run(scenario())
 
@@ -421,13 +471,11 @@ def test_home_content_scrolls_to_its_end_at_a_short_height() -> None:
     _run(scenario())
 
 
-def test_header_and_footer_stay_usable_while_the_body_scrolls() -> None:
+def test_footer_stays_usable_while_the_body_scrolls() -> None:
     async def scenario() -> None:
         tui = KeniranTui()
         async with tui.run_test(size=(80, 16)) as pilot:
-            header = tui.query_one(Header)
             footer = tui.query_one(Footer)
-            header_top = header.region.y
             footer_bottom = footer.region.bottom
 
             results = tui.query_one(f"#{RESULTS_ID}", Container)
@@ -445,10 +493,8 @@ def test_header_and_footer_stay_usable_while_the_body_scrolls() -> None:
             )
 
             assert body.is_vertical_scroll_end
-            # Docked widgets stay put while the body scrolls underneath them.
-            assert header.region.y == header_top
+            # The docked Footer stays put while the body scrolls underneath it.
             assert footer.region.bottom == footer_bottom
-            assert header.region.height > 0
             assert footer.region.height > 0
 
     _run(scenario())

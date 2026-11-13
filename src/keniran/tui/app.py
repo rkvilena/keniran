@@ -15,6 +15,14 @@ invalid app ids and worker errors (Steam adapter failures or unexpected
 exceptions) are mounted as styled inline messages, the Run button is
 re-enabled, and the next check can run in the same session.
 
+The app paints itself with the custom ``keniran`` theme
+(:mod:`keniran.tui.theme`): a near-black gray monochrome with exactly one amber
+role. The theme is registered and selected in ``__init__`` (register first,
+then select through the ``theme`` reactive), so the built-ins — including
+``tokyo-night`` — remain selectable from the command palette (Ctrl+P). The
+shell carries no Header chrome: the Footer with key hints stays docked under
+the scrollable body.
+
 The home screen is the branded entry point: a ``Keniran`` title, the ``keniran``
 wordmark, the approved tagline, and the App ID/Run controls grouped in one
 bordered command box. The branding is presentation only; every id, handler and
@@ -35,13 +43,14 @@ from typing import Final
 from rich.text import Text
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, Vertical, VerticalScroll
-from textual.widgets import Button, Footer, Header, Input, Static
+from textual.widgets import Button, Footer, Input, Static
 from textual.worker import Worker, WorkerState
 
 from keniran.adapters import steam
 from keniran.core.models import Report, SystemSpec
 from keniran.rendering.report_view import report_renderables
 from keniran.services.check_game import BenchmarkDatabase, check_game
+from keniran.tui.theme import KENIRAN_THEME_NAME, register_keniran_theme
 
 APP_ID_INPUT_ID: Final = "app-id-input"
 RUN_BUTTON_ID: Final = "run-button"
@@ -64,7 +73,6 @@ class KeniranTui(App[None]):
 
     TITLE = "keniran"
     SUB_TITLE = "Can I run it?"
-    theme = "tokyo-night"
 
     CSS = """
     Screen {
@@ -142,8 +150,14 @@ class KeniranTui(App[None]):
         The keyword arguments are stored untouched and passed to
         :func:`~keniran.services.check_game.check_game` on every run; tests
         inject fakes here to keep pilot runs fully offline.
+
+        The ``keniran`` theme is registered first and only then selected
+        through the ``theme`` reactive: assigning an unregistered name would
+        raise :class:`textual.app.InvalidThemeError` (register before select).
         """
         super().__init__()
+        register_keniran_theme(self)
+        self.theme = KENIRAN_THEME_NAME
         self._fetch_steam = fetch_steam
         self._load_spec = load_spec
         self._cpu_db = cpu_db
@@ -151,7 +165,6 @@ class KeniranTui(App[None]):
         self._check_worker: Worker[Report] | None = None
 
     def compose(self) -> ComposeResult:
-        yield Header()
         with VerticalScroll(id=BODY_ID, can_focus=False):
             with Vertical(id="home"):
                 yield Static("Keniran", id=TITLE_ID, classes="brand-title")
