@@ -10,6 +10,11 @@ while Steam and the hardware audit are in flight. The report itself is mounted
 from :func:`keniran.rendering.report_view.report_renderables`, the same ordered
 renderables the CLI prints.
 
+Results replace the home screen: as soon as anything is mounted in the results
+area (the busy status line, an inline error, or a report), the hero steps
+aside — hidden through a CSS class (``display: none``), never unmounted — and
+the results occupy its space. The command box stays visible throughout.
+
 Failure paths are honest and non-fatal, mirroring the CLI's ``_fail`` helper:
 invalid app ids and worker errors (Steam adapter failures or unexpected
 exceptions) are mounted as styled inline messages, and the next check can run
@@ -26,9 +31,11 @@ the scrollable body.
 The home screen is the branded entry point: a centered hero holding the
 ``keniran`` ASCII-art wordmark (:mod:`keniran.tui.branding`) and the subtitle,
 above the App ID control grouped in one bordered command box. Enter in the
-input submits the check. The wordmark is the full six-row art when the
-terminal fits it and the compact four-row fallback otherwise, re-applied on
-mount and on every resize. The branding is
+input submits the check; Reset (the button in the command box, or Esc
+anywhere) restores the home screen — the hero reappears and the App ID input
+and the results area are cleared. The wordmark is the full six-row art when
+the terminal fits it and the compact four-row fallback otherwise, re-applied
+on mount and on every resize. The branding is
 presentation only; every id, handler and worker contract below is unchanged.
 
 The home block and the results area share one vertically scrollable body, so
@@ -41,14 +48,15 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from functools import partial
-from typing import Final
+from typing import ClassVar, Final
 
 from rich.text import Text
 from textual import events
 from textual.app import App, ComposeResult
+from textual.binding import Binding, BindingType
 from textual.containers import Container, Horizontal, Vertical, VerticalScroll
 from textual.geometry import Size
-from textual.widgets import Footer, Input, Static
+from textual.widgets import Button, Footer, Input, Static
 from textual.worker import Worker, WorkerState
 
 from keniran.adapters import steam
@@ -59,12 +67,14 @@ from keniran.tui import branding
 from keniran.tui.theme import KENIRAN_THEME_NAME, register_keniran_theme
 
 APP_ID_INPUT_ID: Final = "app-id-input"
+RESET_BUTTON_ID: Final = "reset-button"
 STATUS_ID: Final = "check-status"
 RESULTS_ID: Final = "results"
 ERROR_ID: Final = "check-error"
 ERROR_STYLE: Final = "bold red"
 
 HERO_ID: Final = "hero"
+HERO_HIDDEN_CLASS: Final = "hidden"
 WORDMARK_ID: Final = "keniran-wordmark"
 SUBTITLE_ID: Final = "keniran-subtitle"
 COMMAND_BOX_ID: Final = "command-box"
@@ -80,10 +90,15 @@ WORDMARK_MIN_HEIGHT: Final = 22
 
 
 class KeniranTui(App[None]):
-    """Minimal keniran TUI shell: app-id input (Enter submits), results area."""
+    """Minimal keniran TUI shell: app-id input (Enter submits), results, Reset/Esc."""
 
     TITLE = "keniran"
     SUB_TITLE = "Can I run it?"
+
+    # Esc is the keyboard twin of the Reset button (R12): both restore the
+    # home screen, so the reset is always one keystroke away. The base App
+    # bindings (Ctrl+P palette, Ctrl+Q quit) merge with these.
+    BINDINGS: ClassVar[list[BindingType]] = [Binding("escape", "reset", "Reset", show=True)]
 
     CSS = """
     Screen {
@@ -105,6 +120,10 @@ class KeniranTui(App[None]):
         height: auto;
         width: 1fr;
         content-align: center middle;
+    }
+
+    #hero.hidden {
+        display: none;
     }
 
     #keniran-wordmark {
@@ -137,6 +156,11 @@ class KeniranTui(App[None]):
 
     #app-id-input {
         width: 32;
+    }
+
+    #reset-button {
+        margin-left: 2;
+        border: tall $accent;
     }
 
     #results {
@@ -191,6 +215,7 @@ class KeniranTui(App[None]):
                         id=APP_ID_INPUT_ID,
                         restrict=r"[0-9]*",
                     )
+                    yield Button("Reset", id=RESET_BUTTON_ID)
             yield Container(id=RESULTS_ID)
         yield Footer()
 
@@ -230,6 +255,16 @@ class KeniranTui(App[None]):
         if event.input.id != APP_ID_INPUT_ID:
             return
         await self._request_check()
+
+    async def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle the Reset button (the only button press the shell knows)."""
+        if event.button.id != RESET_BUTTON_ID:
+            return
+        await self._reset()
+
+    async def action_reset(self) -> None:
+        """Run the reset for the Esc binding (the same reset as the button)."""
+        await self._reset()
 
     async def on_worker_state_changed(self, event: Worker.StateChanged) -> None:
         """Replace the status line with the report or a styled inline error."""
@@ -296,6 +331,7 @@ class KeniranTui(App[None]):
 
     async def _show_status(self, app_id: int) -> None:
         """Mount the running status line naming the requested app id."""
+        self._hide_hero()
         await self._clear_results()
         self.query_one(f"#{RESULTS_ID}", Container).mount(
             Static(f"Checking Steam app {app_id}…", id=STATUS_ID)
@@ -303,6 +339,7 @@ class KeniranTui(App[None]):
 
     async def _show_error(self, message: str) -> None:
         """Mount one styled inline error (the TUI's counterpart of ``_fail``)."""
+        self._hide_hero()
         await self._clear_results()
         self.query_one(f"#{RESULTS_ID}", Container).mount(
             Static(Text(f"Error: {message}", style=ERROR_STYLE), id=ERROR_ID)
@@ -310,6 +347,7 @@ class KeniranTui(App[None]):
 
     async def _show_report(self, report: Report) -> None:
         """Replace the status line with the shared report renderables."""
+        self._hide_hero()
         await self._clear_results()
         self.query_one(f"#{RESULTS_ID}", Container).mount(
             *(Static(renderable) for renderable in report_renderables(report))
@@ -318,6 +356,23 @@ class KeniranTui(App[None]):
     async def _clear_results(self) -> None:
         """Remove everything currently mounted in the results area."""
         await self.query_one(f"#{RESULTS_ID}", Container).remove_children()
+
+    def _hide_hero(self) -> None:
+        """Hide the hero so the results occupy its space (it stays mounted)."""
+        self.query_one(f"#{HERO_ID}", Container).add_class(HERO_HIDDEN_CLASS)
+
+    async def _reset(self) -> None:
+        """Restore the home screen: unhide the hero, clear input and results.
+
+        Both the Reset button and the Esc binding land here, so the shell
+        returns to its initial state without unmounting anything and the next
+        check can run in the same session.
+        """
+        self.query_one(f"#{HERO_ID}", Container).remove_class(HERO_HIDDEN_CLASS)
+        await self._clear_results()
+        app_id_input = self.query_one(f"#{APP_ID_INPUT_ID}", Input)
+        app_id_input.value = ""
+        app_id_input.focus()
 
 
 def run_tui() -> None:

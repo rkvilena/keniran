@@ -26,7 +26,7 @@ from rich.text import Text
 from textual.app import App
 from textual.containers import Container, VerticalScroll
 from textual.pilot import Pilot
-from textual.widgets import Footer, Input, Static
+from textual.widgets import Button, Footer, Input, Static
 from textual.worker import WorkerFailed
 from typer.testing import CliRunner
 
@@ -51,6 +51,7 @@ from keniran.tui.app import (
     ERROR_ID,
     ERROR_STYLE,
     HERO_ID,
+    RESET_BUTTON_ID,
     RESULTS_ID,
     STATUS_ID,
     SUBTITLE,
@@ -253,7 +254,9 @@ def test_app_id_control_is_grouped_in_the_command_box() -> None:
             assert box.has_class("command-box")
 
             app_id_input = tui.query_one(f"#{APP_ID_INPUT_ID}", Input)
+            reset_button = tui.query_one(f"#{RESET_BUTTON_ID}", Button)
             assert app_id_input in list(box.query(Input))
+            assert reset_button in list(box.query(Button))
 
             # The grouping is visual: a rounded panel border on the surface pane.
             border_style, border_color = box.styles.border_top
@@ -261,8 +264,9 @@ def test_app_id_control_is_grouped_in_the_command_box() -> None:
             assert border_color.hex == tui.get_css_variables()["panel"]
             assert box.styles.background.hex == tui.get_css_variables()["surface"]
 
-            # The App ID control keeps a real, visible region inside the box.
+            # Both controls keep a real, visible region inside the box.
             assert app_id_input.region.width > 0
+            assert reset_button.region.width > 0
 
     _run(scenario())
 
@@ -277,6 +281,7 @@ def test_branded_styles_use_textual_theme_tokens() -> None:
                 "$surface",
                 "$panel",
                 "$primary",
+                "$accent",
                 "$text-muted",
             ):
                 assert token in css
@@ -294,11 +299,11 @@ def test_branded_styles_use_textual_theme_tokens() -> None:
             assert tui.available_themes[KENIRAN_THEME_NAME].accent == "#E0A64B"
             assert variables["accent"] == "#DFA64B"
 
-            # Exactly one amber accent (R1), and it lives in the theme data:
-            # the shell CSS paints no accent of its own now that the Run
-            # button is gone (Enter submits); later controls reuse the theme
-            # accent instead of a second amber.
-            assert "$accent" not in KeniranTui.CSS
+            # Exactly one amber accent (R1): the $accent token paints only the
+            # Reset button border, and it really resolves to the theme amber.
+            assert KeniranTui.CSS.count("$accent") == 1
+            reset_button = tui.query_one(f"#{RESET_BUTTON_ID}", Button)
+            assert reset_button.styles.border_top[1].hex == variables["accent"]
 
             # The wordmark is the large gray brand mark (bold + $primary).
             wordmark = tui.query_one(f"#{WORDMARK_ID}", Static)
@@ -426,16 +431,19 @@ def test_app_id_control_is_not_horizontally_clipped() -> None:
             async with tui.run_test(size=(width, height)) as pilot:
                 await pilot.pause()
                 app_id_input = tui.query_one(f"#{APP_ID_INPUT_ID}", Input)
+                reset_button = tui.query_one(f"#{RESET_BUTTON_ID}", Button)
 
-                region = app_id_input.region
-                assert region.width > 0
-                assert region.height > 0
-                assert region.x >= 0
-                assert region.right <= tui.size.width
+                for widget in (app_id_input, reset_button):
+                    region = widget.region
+                    assert region.width > 0
+                    assert region.height > 0
+                    assert region.x >= 0
+                    assert region.right <= tui.size.width
 
-                # The control stays inside the visible screen, never pushed
+                # The controls stay inside the visible screen, never pushed
                 # off the bottom by the scroll wrapper.
                 assert app_id_input.region.bottom <= tui.size.height
+                assert reset_button.region.bottom <= tui.size.height
 
     _run(scenario())
 
@@ -445,10 +453,11 @@ def test_controls_remain_keyboard_reachable_at_a_compact_size() -> None:
         tui = KeniranTui()
         async with tui.run_test(size=(80, 16)) as pilot:
             app_id_input = tui.query_one(f"#{APP_ID_INPUT_ID}", Input)
+            reset_button = tui.query_one(f"#{RESET_BUTTON_ID}", Button)
 
-            # The scroll region is not focusable and there is no Run button,
-            # so the App ID input is the only focusable widget in the chain.
-            assert tui.screen.focus_chain == [app_id_input]
+            # The scroll region is not focusable, so the tab chain is still
+            # exactly the App ID input followed by the Reset button.
+            assert tui.screen.focus_chain == [app_id_input, reset_button]
 
             app_id_input.focus()
             await pilot.pause()
@@ -457,11 +466,11 @@ def test_controls_remain_keyboard_reachable_at_a_compact_size() -> None:
             await pilot.press("7", "2", "8")
             assert app_id_input.value == "728"
 
-            # Tab wraps around the single-widget chain: the input keeps focus,
-            # so Enter to submit is always one keystroke away.
+            # Tab moves the focus on to the Reset button: Enter to submit and
+            # the reset stay one keystroke away from either control.
             await pilot.press("tab")
             await pilot.pause()
-            assert tui.focused is app_id_input
+            assert tui.focused is reset_button
 
     _run(scenario())
 
@@ -764,6 +773,97 @@ def test_message_only_report_replaces_the_status_line(
             contents = [child.content for child in results.children if isinstance(child, Static)]
             assert contents == [Text(message)]
             assert list(tui.query(f"#{ERROR_ID}")) == []
+
+    _run(scenario())
+
+
+def test_results_replace_the_hero_and_reset_restores_the_home_screen(
+    monkeypatch: pytest.MonkeyPatch,
+    full_report: Report,
+) -> None:
+    """R5/R6/R10: results replace the hero; Reset and Esc restore the home screen.
+
+    The hero is hidden with a ``display: none`` class — never unmounted —
+    whenever the results area shows anything (status, report, or inline
+    error). Reset (the button) and Esc each bring the home screen back with
+    an empty input and an empty results area, ready for a new check.
+    """
+
+    def fake_check_game(app_id: int, **kwargs: Any) -> Report:
+        return full_report
+
+    monkeypatch.setattr(tui_app, "check_game", fake_check_game)
+
+    async def scenario() -> None:
+        tui = KeniranTui()
+        async with tui.run_test() as pilot:
+            home = tui.query_one("#home")
+            hero = tui.query_one(f"#{HERO_ID}", Container)
+            box = tui.query_one(f"#{COMMAND_BOX_ID}", Container)
+            app_id_input = tui.query_one(f"#{APP_ID_INPUT_ID}", Input)
+            reset_button = tui.query_one(f"#{RESET_BUTTON_ID}", Button)
+            results = tui.query_one(f"#{RESULTS_ID}", Container)
+
+            # Home screen: the hero is mounted and occupies its space.
+            await pilot.pause()
+            assert not hero.has_class("hidden")
+            assert hero in list(home.children)
+            assert hero.region.height > 0
+            hero_top = hero.region.y
+
+            # A completed check hides the hero without unmounting it: the
+            # results take over its space and the command box slides up into
+            # the hero's former position.
+            app_id_input.value = str(APP_ID)
+            await _submit(tui, pilot)
+            await _wait_for_check(tui, pilot)
+            await pilot.pause()
+
+            assert hero.has_class("hidden")
+            assert hero in list(home.children)
+            await _wait_until(lambda: hero.region.height == 0, pilot)
+            assert len(results.children) > 0
+            await _wait_until(lambda: box.region.y == hero_top, pilot)
+            # The command box (and the input in it) stays visible throughout.
+            assert box.region.height > 0
+            assert app_id_input.region.width > 0
+
+            # Reset via the button restores the hero and clears everything.
+            await pilot.click(reset_button)
+            await pilot.pause()
+            assert not hero.has_class("hidden")
+            await _wait_until(lambda: hero.region.height > 0, pilot)
+            assert len(results.children) == 0
+            assert app_id_input.value == ""
+
+            # The restored home screen runs a new check again.
+            app_id_input.value = str(APP_ID)
+            await _submit(tui, pilot)
+            await _wait_for_check(tui, pilot)
+            await pilot.pause()
+            assert hero.has_class("hidden")
+            assert len(results.children) > 0
+
+            # Esc does the same as the Reset button.
+            await pilot.press("escape")
+            await pilot.pause()
+            assert not hero.has_class("hidden")
+            await _wait_until(lambda: hero.region.height > 0, pilot)
+            assert len(results.children) == 0
+            assert app_id_input.value == ""
+
+            # The inline-error recovery path still works after a reset: an
+            # invalid id mounts the red inline message (and hides the hero)
+            # without ever reaching the pipeline.
+            await _submit(tui, pilot)
+            await _wait_until(
+                lambda: "Invalid APP_ID ''" in " ".join(_error_texts(tui)),
+                pilot,
+            )
+            assert hero.has_class("hidden")
+            content = tui.query_one(f"#{ERROR_ID}", Static).content
+            assert isinstance(content, Text)
+            assert content.style == ERROR_STYLE
 
     _run(scenario())
 
