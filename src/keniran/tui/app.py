@@ -12,8 +12,8 @@ renderables the CLI prints.
 
 Failure paths are honest and non-fatal, mirroring the CLI's ``_fail`` helper:
 invalid app ids and worker errors (Steam adapter failures or unexpected
-exceptions) are mounted as styled inline messages, the Run button is
-re-enabled, and the next check can run in the same session.
+exceptions) are mounted as styled inline messages, and the next check can run
+in the same session.
 
 The app paints itself with the custom ``keniran`` theme
 (:mod:`keniran.tui.theme`): a near-black gray monochrome with exactly one amber
@@ -25,9 +25,10 @@ the scrollable body.
 
 The home screen is the branded entry point: a centered hero holding the
 ``keniran`` ASCII-art wordmark (:mod:`keniran.tui.branding`) and the subtitle,
-above the App ID/Run controls grouped in one bordered command box. The wordmark
-is the full six-row art when the terminal fits it and the compact four-row
-fallback otherwise, re-applied on mount and on every resize. The branding is
+above the App ID control grouped in one bordered command box. Enter in the
+input submits the check. The wordmark is the full six-row art when the
+terminal fits it and the compact four-row fallback otherwise, re-applied on
+mount and on every resize. The branding is
 presentation only; every id, handler and worker contract below is unchanged.
 
 The home block and the results area share one vertically scrollable body, so
@@ -47,7 +48,7 @@ from textual import events
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, Vertical, VerticalScroll
 from textual.geometry import Size
-from textual.widgets import Button, Footer, Input, Static
+from textual.widgets import Footer, Input, Static
 from textual.worker import Worker, WorkerState
 
 from keniran.adapters import steam
@@ -58,7 +59,6 @@ from keniran.tui import branding
 from keniran.tui.theme import KENIRAN_THEME_NAME, register_keniran_theme
 
 APP_ID_INPUT_ID: Final = "app-id-input"
-RUN_BUTTON_ID: Final = "run-button"
 STATUS_ID: Final = "check-status"
 RESULTS_ID: Final = "results"
 ERROR_ID: Final = "check-error"
@@ -80,7 +80,7 @@ WORDMARK_MIN_HEIGHT: Final = 22
 
 
 class KeniranTui(App[None]):
-    """Minimal keniran TUI shell: app-id input, Run button, results area."""
+    """Minimal keniran TUI shell: app-id input (Enter submits), results area."""
 
     TITLE = "keniran"
     SUB_TITLE = "Can I run it?"
@@ -139,11 +139,6 @@ class KeniranTui(App[None]):
         width: 32;
     }
 
-    #run-button {
-        margin-left: 2;
-        border: tall $accent;
-    }
-
     #results {
         height: auto;
         width: 1fr;
@@ -196,7 +191,6 @@ class KeniranTui(App[None]):
                         id=APP_ID_INPUT_ID,
                         restrict=r"[0-9]*",
                     )
-                    yield Button("Run", id=RUN_BUTTON_ID, variant="primary")
             yield Container(id=RESULTS_ID)
         yield Footer()
 
@@ -231,9 +225,9 @@ class KeniranTui(App[None]):
             )
         self.query_one(f"#{WORDMARK_ID}", Static).update(art)
 
-    async def on_button_pressed(self, event: Button.Pressed) -> None:
-        """Handle the Run button."""
-        if event.button.id != RUN_BUTTON_ID:
+    async def on_input_submitted(self, event: Input.Submitted) -> None:
+        """Submit the check when Enter is pressed in the App ID input."""
+        if event.input.id != APP_ID_INPUT_ID:
             return
         await self._request_check()
 
@@ -247,19 +241,16 @@ class KeniranTui(App[None]):
             if report is not None:
                 await self._show_report(report)
             else:
-                self._set_running(False)
                 await self._clear_results()
         elif event.state is WorkerState.ERROR:
             error = event.worker.error
             self._check_worker = None
-            self._set_running(False)
             if isinstance(error, steam.SteamAdapterError):
                 await self._show_error(str(error))
             else:
                 await self._show_error(f"Unexpected error: {error}")
         elif event.state is WorkerState.CANCELLED:
             self._check_worker = None
-            self._set_running(False)
             await self._clear_results()
 
     async def _request_check(self) -> None:
@@ -268,8 +259,8 @@ class KeniranTui(App[None]):
         An invalid app id never starts a worker: the inline validation message
         (the TUI counterpart of the CLI's ``_fail``) replaces the results
         instead. A second request while a check is in flight is ignored: the
-        Run button stays disabled for the whole run (the pinned behaviour in
-        the pilot tests) and the worker guard covers programmatic calls.
+        worker guard drops the duplicate Enter submission until the running
+        check finishes.
         """
         entered = self.query_one(f"#{APP_ID_INPUT_ID}", Input).value
         raw = entered.strip()
@@ -284,7 +275,6 @@ class KeniranTui(App[None]):
             return
 
         await self._show_status(app_id)
-        self._set_running(True)
         self._check_worker = self.run_worker(
             partial(self._run_check, app_id),
             name=f"check-{app_id}",
@@ -324,15 +314,10 @@ class KeniranTui(App[None]):
         self.query_one(f"#{RESULTS_ID}", Container).mount(
             *(Static(renderable) for renderable in report_renderables(report))
         )
-        self._set_running(False)
 
     async def _clear_results(self) -> None:
         """Remove everything currently mounted in the results area."""
         await self.query_one(f"#{RESULTS_ID}", Container).remove_children()
-
-    def _set_running(self, running: bool) -> None:
-        """Enable or disable the Run button for the duration of a check."""
-        self.query_one(f"#{RUN_BUTTON_ID}", Button).disabled = running
 
 
 def run_tui() -> None:

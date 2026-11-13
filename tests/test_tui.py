@@ -26,7 +26,7 @@ from rich.text import Text
 from textual.app import App
 from textual.containers import Container, VerticalScroll
 from textual.pilot import Pilot
-from textual.widgets import Button, Footer, Input, Static
+from textual.widgets import Footer, Input, Static
 from textual.worker import WorkerFailed
 from typer.testing import CliRunner
 
@@ -52,7 +52,6 @@ from keniran.tui.app import (
     ERROR_STYLE,
     HERO_ID,
     RESULTS_ID,
-    RUN_BUTTON_ID,
     STATUS_ID,
     SUBTITLE,
     SUBTITLE_ID,
@@ -103,11 +102,14 @@ def _error_texts(tui: KeniranTui) -> list[str]:
     ]
 
 
-async def _click_run(tui: KeniranTui, pilot: Pilot) -> None:
-    """Click Run once the button's press animation no longer swallows clicks."""
-    button = tui.query_one(f"#{RUN_BUTTON_ID}", Button)
-    await _wait_until(lambda: not button.has_class("-active"), pilot)
-    await pilot.click(f"#{RUN_BUTTON_ID}")
+async def _submit(tui: KeniranTui, pilot: Pilot) -> None:
+    """Focus the App ID input and press Enter to submit the check.
+
+    Enter only submits from the focused input, so the helper pins the focus
+    the same way a keyboard user would.
+    """
+    tui.query_one(f"#{APP_ID_INPUT_ID}", Input).focus()
+    await pilot.press("enter")
 
 
 # --- offline pipeline fixtures ---------------------------------------------
@@ -203,7 +205,6 @@ def test_app_mounts_shell_with_keniran_theme() -> None:
             assert not list(tui.query("Header"))
             app_id_input = tui.query_one(f"#{APP_ID_INPUT_ID}", Input)
             assert app_id_input.restrict == r"[0-9]*"
-            assert isinstance(tui.query_one(f"#{RUN_BUTTON_ID}", Button), Button)
             results = tui.query_one(f"#{RESULTS_ID}", Container)
             assert len(results.children) == 0
 
@@ -244,7 +245,7 @@ def test_home_screen_shows_the_keniran_brand_block() -> None:
     _run(scenario())
 
 
-def test_app_id_and_run_controls_are_grouped_in_the_command_box() -> None:
+def test_app_id_control_is_grouped_in_the_command_box() -> None:
     async def scenario() -> None:
         tui = KeniranTui()
         async with tui.run_test():
@@ -252,9 +253,7 @@ def test_app_id_and_run_controls_are_grouped_in_the_command_box() -> None:
             assert box.has_class("command-box")
 
             app_id_input = tui.query_one(f"#{APP_ID_INPUT_ID}", Input)
-            run_button = tui.query_one(f"#{RUN_BUTTON_ID}", Button)
             assert app_id_input in list(box.query(Input))
-            assert run_button in list(box.query(Button))
 
             # The grouping is visual: a rounded panel border on the surface pane.
             border_style, border_color = box.styles.border_top
@@ -262,9 +261,8 @@ def test_app_id_and_run_controls_are_grouped_in_the_command_box() -> None:
             assert border_color.hex == tui.get_css_variables()["panel"]
             assert box.styles.background.hex == tui.get_css_variables()["surface"]
 
-            # Both controls keep a real, visible region inside the box.
+            # The App ID control keeps a real, visible region inside the box.
             assert app_id_input.region.width > 0
-            assert run_button.region.width > 0
 
     _run(scenario())
 
@@ -279,7 +277,6 @@ def test_branded_styles_use_textual_theme_tokens() -> None:
                 "$surface",
                 "$panel",
                 "$primary",
-                "$accent",
                 "$text-muted",
             ):
                 assert token in css
@@ -297,11 +294,11 @@ def test_branded_styles_use_textual_theme_tokens() -> None:
             assert tui.available_themes[KENIRAN_THEME_NAME].accent == "#E0A64B"
             assert variables["accent"] == "#DFA64B"
 
-            # Exactly one accent role: the $accent token appears only on the
-            # Run button border, which really paints the resolved amber.
-            assert KeniranTui.CSS.count("$accent") == 1
-            run_button = tui.query_one(f"#{RUN_BUTTON_ID}", Button)
-            assert run_button.styles.border_top[1].hex == variables["accent"]
+            # Exactly one amber accent (R1), and it lives in the theme data:
+            # the shell CSS paints no accent of its own now that the Run
+            # button is gone (Enter submits); later controls reuse the theme
+            # accent instead of a second amber.
+            assert "$accent" not in KeniranTui.CSS
 
             # The wordmark is the large gray brand mark (bold + $primary).
             wordmark = tui.query_one(f"#{WORDMARK_ID}", Static)
@@ -422,26 +419,23 @@ def test_wordmark_falls_back_to_compact_art_at_a_short_terminal() -> None:
     _run(scenario())
 
 
-def test_app_id_and_run_controls_are_not_horizontally_clipped() -> None:
+def test_app_id_control_is_not_horizontally_clipped() -> None:
     async def scenario() -> None:
         for width, height in ((100, 30), (80, 16)):
             tui = KeniranTui()
             async with tui.run_test(size=(width, height)) as pilot:
                 await pilot.pause()
                 app_id_input = tui.query_one(f"#{APP_ID_INPUT_ID}", Input)
-                run_button = tui.query_one(f"#{RUN_BUTTON_ID}", Button)
 
-                for widget in (app_id_input, run_button):
-                    region = widget.region
-                    assert region.width > 0
-                    assert region.height > 0
-                    assert region.x >= 0
-                    assert region.right <= tui.size.width
+                region = app_id_input.region
+                assert region.width > 0
+                assert region.height > 0
+                assert region.x >= 0
+                assert region.right <= tui.size.width
 
-                # The controls stay inside the visible screen, never pushed off
-                # the bottom by the scroll wrapper.
+                # The control stays inside the visible screen, never pushed
+                # off the bottom by the scroll wrapper.
                 assert app_id_input.region.bottom <= tui.size.height
-                assert run_button.region.bottom <= tui.size.height
 
     _run(scenario())
 
@@ -451,11 +445,10 @@ def test_controls_remain_keyboard_reachable_at_a_compact_size() -> None:
         tui = KeniranTui()
         async with tui.run_test(size=(80, 16)) as pilot:
             app_id_input = tui.query_one(f"#{APP_ID_INPUT_ID}", Input)
-            run_button = tui.query_one(f"#{RUN_BUTTON_ID}", Button)
 
-            # The scroll region is not focusable, so the tab chain is still
-            # exactly the input followed by the Run button.
-            assert tui.screen.focus_chain == [app_id_input, run_button]
+            # The scroll region is not focusable and there is no Run button,
+            # so the App ID input is the only focusable widget in the chain.
+            assert tui.screen.focus_chain == [app_id_input]
 
             app_id_input.focus()
             await pilot.pause()
@@ -464,9 +457,11 @@ def test_controls_remain_keyboard_reachable_at_a_compact_size() -> None:
             await pilot.press("7", "2", "8")
             assert app_id_input.value == "728"
 
+            # Tab wraps around the single-widget chain: the input keeps focus,
+            # so Enter to submit is always one keystroke away.
             await pilot.press("tab")
             await pilot.pause()
-            assert tui.focused is run_button
+            assert tui.focused is app_id_input
 
     _run(scenario())
 
@@ -620,7 +615,7 @@ def test_run_executes_check_game_with_injection_kwargs_in_a_worker(
         )
         async with tui.run_test() as pilot:
             tui.query_one(f"#{APP_ID_INPUT_ID}", Input).value = str(APP_ID)
-            await pilot.click(f"#{RUN_BUTTON_ID}")
+            await _submit(tui, pilot)
             await _wait_for_check(tui, pilot)
 
             assert len(calls) == 1
@@ -636,10 +631,11 @@ def test_run_executes_check_game_with_injection_kwargs_in_a_worker(
     _run(scenario())
 
 
-def test_status_and_disabled_run_stay_visible_while_checking(
+def test_status_line_stays_visible_while_checking_and_a_second_enter_is_a_no_op(
     monkeypatch: pytest.MonkeyPatch,
     full_report: Report,
 ) -> None:
+    """Enter starts exactly one worker; a second Enter in flight is a no-op."""
     started = threading.Event()
     release = threading.Event()
     calls: list[int] = []
@@ -658,14 +654,14 @@ def test_status_and_disabled_run_stay_visible_while_checking(
         async with tui.run_test() as pilot:
             app_id_input = tui.query_one(f"#{APP_ID_INPUT_ID}", Input)
             app_id_input.value = str(APP_ID)
-            run_button = tui.query_one(f"#{RUN_BUTTON_ID}", Button)
 
-            await pilot.click(f"#{RUN_BUTTON_ID}")
+            await _submit(tui, pilot)
             await _wait_until(started.is_set, pilot)
             await pilot.pause()
 
             try:
-                assert run_button.disabled is True
+                # The busy status line names the requested app id while the
+                # worker runs.
                 status = tui.query_one(f"#{STATUS_ID}", Static)
                 assert str(APP_ID) in str(status.content)
                 assert tui.is_running
@@ -677,8 +673,9 @@ def test_status_and_disabled_run_stay_visible_while_checking(
                 assert app_id_input.value.endswith("98")
                 assert app_id_input.value != str(APP_ID)
 
-                # A second click on the disabled Run button starts no worker.
-                await pilot.click(f"#{RUN_BUTTON_ID}")
+                # A second Enter while the check is in flight starts no
+                # worker: the worker guard drops the duplicate submission.
+                await _submit(tui, pilot)
                 await pilot.pause()
                 assert calls == [APP_ID]
             finally:
@@ -686,8 +683,10 @@ def test_status_and_disabled_run_stay_visible_while_checking(
 
             await _wait_for_check(tui, pilot)
 
-            assert run_button.disabled is False
+            # The finished check replaces the status line with the report.
             assert list(tui.query(f"#{STATUS_ID}")) == []
+            results = tui.query_one(f"#{RESULTS_ID}", Container)
+            assert len(results.children) > 0
 
     _run(scenario())
 
@@ -705,7 +704,7 @@ def test_completed_check_mounts_the_shared_report_renderables(
         tui = KeniranTui()
         async with tui.run_test() as pilot:
             tui.query_one(f"#{APP_ID_INPUT_ID}", Input).value = str(APP_ID)
-            await pilot.click(f"#{RUN_BUTTON_ID}")
+            await _submit(tui, pilot)
             await _wait_for_check(tui, pilot)
             await pilot.pause()
 
@@ -757,7 +756,7 @@ def test_message_only_report_replaces_the_status_line(
         tui = KeniranTui()
         async with tui.run_test() as pilot:
             tui.query_one(f"#{APP_ID_INPUT_ID}", Input).value = str(APP_ID)
-            await pilot.click(f"#{RUN_BUTTON_ID}")
+            await _submit(tui, pilot)
             await _wait_for_check(tui, pilot)
             await pilot.pause()
 
@@ -787,7 +786,7 @@ def test_invalid_app_id_shows_inline_validation_and_starts_no_worker(
         tui = KeniranTui()
         async with tui.run_test() as pilot:
             # Empty input: the worker must not start and the message is styled.
-            await _click_run(tui, pilot)
+            await _submit(tui, pilot)
             await _wait_until(
                 lambda: "Invalid APP_ID ''" in " ".join(_error_texts(tui)),
                 pilot,
@@ -799,13 +798,12 @@ def test_invalid_app_id_shows_inline_validation_and_starts_no_worker(
             assert isinstance(content, Text)
             assert content.plain == ("Error: Invalid APP_ID '': expected a numeric Steam app id.")
             assert content.style == ERROR_STYLE
-            assert tui.query_one(f"#{RUN_BUTTON_ID}", Button).disabled is False
             assert list(tui.query(f"#{STATUS_ID}")) == []
 
             # Non-digit input (programmatic, since the widget restricts typing).
             app_id_input = tui.query_one(f"#{APP_ID_INPUT_ID}", Input)
             app_id_input.value = "abc"
-            await _click_run(tui, pilot)
+            await _submit(tui, pilot)
             await _wait_until(
                 lambda: any("Invalid APP_ID 'abc'" in text for text in _error_texts(tui)),
                 pilot,
@@ -818,7 +816,7 @@ def test_invalid_app_id_shows_inline_validation_and_starts_no_worker(
 
             # Zero is not a valid Steam app id either.
             app_id_input.value = "0"
-            await _click_run(tui, pilot)
+            await _submit(tui, pilot)
             await _wait_until(
                 lambda: any("Invalid APP_ID '0'" in text for text in _error_texts(tui)),
                 pilot,
@@ -849,7 +847,7 @@ def test_steam_app_not_found_is_inline_and_a_later_check_recovers() -> None:
         async with tui.run_test() as pilot:
             app_id_input = tui.query_one(f"#{APP_ID_INPUT_ID}", Input)
             app_id_input.value = str(APP_ID)
-            await pilot.click(f"#{RUN_BUTTON_ID}")
+            await _submit(tui, pilot)
             await _wait_for_check(tui, pilot)
 
             content = tui.query_one(f"#{ERROR_ID}", Static).content
@@ -857,11 +855,10 @@ def test_steam_app_not_found_is_inline_and_a_later_check_recovers() -> None:
             assert str(APP_ID) in content.plain
             assert "not found" in content.plain
             assert content.style == ERROR_STYLE
-            assert tui.query_one(f"#{RUN_BUTTON_ID}", Button).disabled is False
 
             # The app stays usable: a valid check recovers in the same session.
             app_id_input.value = str(good_app_id)
-            await _click_run(tui, pilot)
+            await _submit(tui, pilot)
             await _wait_for_check(tui, pilot)
             await pilot.pause()
 
@@ -885,7 +882,7 @@ def test_generic_steam_adapter_error_is_shown_inline() -> None:
         tui = _offline_tui(fake_fetch_steam)
         async with tui.run_test() as pilot:
             tui.query_one(f"#{APP_ID_INPUT_ID}", Input).value = str(APP_ID)
-            await pilot.click(f"#{RUN_BUTTON_ID}")
+            await _submit(tui, pilot)
             await _wait_for_check(tui, pilot)
 
             content = tui.query_one(f"#{ERROR_ID}", Static).content
@@ -893,7 +890,6 @@ def test_generic_steam_adapter_error_is_shown_inline() -> None:
             assert content.plain == "Error: Steam is unreachable"
             assert content.style == ERROR_STYLE
             assert tui.is_running
-            assert tui.query_one(f"#{RUN_BUTTON_ID}", Button).disabled is False
 
     _run(scenario())
 
@@ -906,7 +902,7 @@ def test_unexpected_exception_surfaces_inline_instead_of_killing_the_app() -> No
         tui = _offline_tui(fake_fetch_steam)
         async with tui.run_test() as pilot:
             tui.query_one(f"#{APP_ID_INPUT_ID}", Input).value = str(APP_ID)
-            await pilot.click(f"#{RUN_BUTTON_ID}")
+            await _submit(tui, pilot)
             await _wait_for_check(tui, pilot)
 
             content = tui.query_one(f"#{ERROR_ID}", Static).content
@@ -915,7 +911,6 @@ def test_unexpected_exception_surfaces_inline_instead_of_killing_the_app() -> No
             assert "boom" in content.plain
             assert content.style == ERROR_STYLE
             assert tui.is_running
-            assert tui.query_one(f"#{RUN_BUTTON_ID}", Button).disabled is False
 
     _run(scenario())
 
