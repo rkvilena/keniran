@@ -215,7 +215,7 @@ class KeniranTui(App[None]):
                 # (full art or the compact fallback) that fits the terminal.
                 with Container(id=HERO_ID, classes="hero"):
                     yield Static("", id=WORDMARK_ID, classes="brand-wordmark")
-                    yield Rule(id="keniran-rule")
+                    yield Rule(id="keniran-rule", line_character="┄")
                     yield Static(SUBTITLE, id=SUBTITLE_ID, classes="brand-subtitle")
                 with (
                     Container(id=COMMAND_BOX_ID, classes="command-box"),
