@@ -48,6 +48,7 @@ from keniran.tui import branding
 from keniran.tui.app import (
     APP_ID_INPUT_ID,
     BODY_ID,
+    CHECK_BUTTON_ID,
     COMMAND_BOX_CENTER_ID,
     COMMAND_BOX_ID,
     ERROR_ID,
@@ -250,7 +251,9 @@ def test_home_screen_shows_the_keniran_brand_block() -> None:
 
             subtitle = tui.query_one(f"#{SUBTITLE_ID}", Static)
             assert (
-                SUBTITLE == "Can I run it? Enter the target game's Steam App ID to audit this PC."
+                SUBTITLE
+                == "Can I run it? Enter the game's Steam App ID, then press Enter to "
+                "check this PC against its minimum requirements."
             )
             assert str(subtitle.content) == SUBTITLE
 
@@ -275,8 +278,10 @@ def test_app_id_control_is_grouped_in_the_command_box() -> None:
             assert box in list(box_center.children)
 
             app_id_input = tui.query_one(f"#{APP_ID_INPUT_ID}", Input)
+            check_button = tui.query_one(f"#{CHECK_BUTTON_ID}", Button)
             reset_button = tui.query_one(f"#{RESET_BUTTON_ID}", Button)
             assert app_id_input in list(box.query(Input))
+            assert check_button in list(box.query(Button))
             assert reset_button in list(box.query(Button))
 
             # The grouping is visual: a rounded panel border on the surface pane.
@@ -293,17 +298,19 @@ def test_app_id_control_is_grouped_in_the_command_box() -> None:
             assert box.region.x == (tui.size.width - box.region.width) // 2
             assert box.region.right <= tui.size.width
 
-            # Both controls keep a real, visible region inside the box.
+            # All controls keep a real, visible region inside the box.
             assert app_id_input.region.width > 0
+            assert check_button.region.width > 0
             assert reset_button.region.width > 0
             assert app_id_input.region.x == box.region.x + 2
-            assert reset_button.region.x > app_id_input.region.x
+            assert check_button.region.x >= app_id_input.region.right
+            assert reset_button.region.x >= check_button.region.right
 
-            # Width hugs the controls: input + Reset (with its left margin) plus
-            # the panel's horizontal padding and border, never a wide fixed span.
+            # Width hugs the controls, including their actual gaps and the
+            # panel's horizontal padding and border, never a fixed wide span.
             chrome = 2 + 2  # padding (1 each side) + border (1 each side)
             assert box.region.width == (
-                app_id_input.region.width + 2 + reset_button.region.width + chrome
+                reset_button.region.right - app_id_input.region.x + chrome
             )
             assert box.region.width < box_center.region.width
 
@@ -500,9 +507,10 @@ def test_app_id_control_is_not_horizontally_clipped() -> None:
             async with tui.run_test(size=(width, height)) as pilot:
                 await pilot.pause()
                 app_id_input = tui.query_one(f"#{APP_ID_INPUT_ID}", Input)
+                check_button = tui.query_one(f"#{CHECK_BUTTON_ID}", Button)
                 reset_button = tui.query_one(f"#{RESET_BUTTON_ID}", Button)
 
-                for widget in (app_id_input, reset_button):
+                for widget in (app_id_input, check_button, reset_button):
                     region = widget.region
                     assert region.width > 0
                     assert region.height > 0
@@ -512,6 +520,7 @@ def test_app_id_control_is_not_horizontally_clipped() -> None:
                 # The controls stay inside the visible screen, never pushed
                 # off the bottom by the scroll wrapper.
                 assert app_id_input.region.bottom <= tui.size.height
+                assert check_button.region.bottom <= tui.size.height
                 assert reset_button.region.bottom <= tui.size.height
 
     _run(scenario())
@@ -522,11 +531,12 @@ def test_controls_remain_keyboard_reachable_at_a_compact_size() -> None:
         tui = KeniranTui()
         async with tui.run_test(size=(80, 16)) as pilot:
             app_id_input = tui.query_one(f"#{APP_ID_INPUT_ID}", Input)
+            check_button = tui.query_one(f"#{CHECK_BUTTON_ID}", Button)
             reset_button = tui.query_one(f"#{RESET_BUTTON_ID}", Button)
 
-            # The scroll region is not focusable, so the tab chain is still
-            # exactly the App ID input followed by the Reset button.
-            assert tui.screen.focus_chain == [app_id_input, reset_button]
+            # The scroll region is not focusable; all controls are reachable
+            # in input → Check → Reset order.
+            assert tui.screen.focus_chain == [app_id_input, check_button, reset_button]
 
             app_id_input.focus()
             await pilot.pause()
@@ -535,11 +545,40 @@ def test_controls_remain_keyboard_reachable_at_a_compact_size() -> None:
             await pilot.press("7", "2", "8")
             assert app_id_input.value == "728"
 
-            # Tab moves the focus on to the Reset button: Enter to submit and
-            # the reset stay one keystroke away from either control.
+            # Tab moves focus to Check, then Reset.
+            await pilot.press("tab")
+            await pilot.pause()
+            assert tui.focused is check_button
             await pilot.press("tab")
             await pilot.pause()
             assert tui.focused is reset_button
+
+    _run(scenario())
+
+
+def test_check_button_submits_the_app_id(
+    monkeypatch: pytest.MonkeyPatch,
+    full_report: Report,
+) -> None:
+    calls: list[int] = []
+
+    def fake_check_game(app_id: int, **kwargs: Any) -> Report:
+        calls.append(app_id)
+        return full_report
+
+    monkeypatch.setattr(tui_app, "check_game", fake_check_game)
+
+    async def scenario() -> None:
+        tui = KeniranTui()
+        async with tui.run_test() as pilot:
+            tui.query_one(f"#{APP_ID_INPUT_ID}", Input).value = str(APP_ID)
+            check_button = tui.query_one(f"#{CHECK_BUTTON_ID}", Button)
+
+            await pilot.click(check_button)
+            await _wait_for_check(tui, pilot)
+
+            assert calls == [APP_ID]
+            assert len(tui.query_one(f"#{RESULTS_ID}", Container).children) > 0
 
     _run(scenario())
 
@@ -709,11 +748,11 @@ def test_run_executes_check_game_with_injection_kwargs_in_a_worker(
     _run(scenario())
 
 
-def test_status_line_stays_visible_while_checking_and_a_second_enter_is_a_no_op(
+def test_status_line_stays_visible_while_checking_and_a_duplicate_submit_is_a_no_op(
     monkeypatch: pytest.MonkeyPatch,
     full_report: Report,
 ) -> None:
-    """Enter starts exactly one worker; a second Enter in flight is a no-op."""
+    """Enter starts one worker; another submission while it runs is a no-op."""
     started = threading.Event()
     release = threading.Event()
     calls: list[int] = []
@@ -731,6 +770,7 @@ def test_status_line_stays_visible_while_checking_and_a_second_enter_is_a_no_op(
         tui = KeniranTui()
         async with tui.run_test() as pilot:
             app_id_input = tui.query_one(f"#{APP_ID_INPUT_ID}", Input)
+            check_button = tui.query_one(f"#{CHECK_BUTTON_ID}", Button)
             app_id_input.value = str(APP_ID)
 
             await _submit(tui, pilot)
@@ -751,9 +791,9 @@ def test_status_line_stays_visible_while_checking_and_a_second_enter_is_a_no_op(
                 assert app_id_input.value.endswith("98")
                 assert app_id_input.value != str(APP_ID)
 
-                # A second Enter while the check is in flight starts no
-                # worker: the worker guard drops the duplicate submission.
-                await _submit(tui, pilot)
+                # Clicking Check while a run is in flight starts no second
+                # worker: both UI submission paths share the same guard.
+                await pilot.click(check_button)
                 await pilot.pause()
                 assert calls == [APP_ID]
             finally:

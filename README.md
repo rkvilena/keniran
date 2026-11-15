@@ -5,27 +5,31 @@
 `keniran <APP_ID>` audits the local machine, fetches a Steam game's minimum PC
 requirements, and prints a per-component comparison with a bottom-line verdict.
 
-This README documents **1.1.0**, a TUI-only visual redesign. It reworks the
-`keniran tui` home screen around a near-black monochrome base with a single
-amber accent: a centered ASCII-art `keniran` wordmark, Enter-to-submit, and
-results that replace the hero. The audit pipeline, the one-shot
+This README documents **1.2.0**. The TUI has a centered ASCII-art `keniran`
+wordmark, clear App ID submission instructions, and clickable Check and Reset
+buttons; Enter still submits and Esc still resets. It also documents isolated
+pipx and uv tool installs, so you can run the `keniran` command without
+manually activating a virtual environment. The audit pipeline, the one-shot
 `keniran <APP_ID>` CLI, and how `or`-joined requirements are matched are
 unchanged.
 
 ## Install
 
-Requires Python 3.11 (the project is pinned to it).
-
-From a clone:
+Requires Python 3.11 (the project is pinned to it). From a clone, choose either
+pipx or uv to install Keniran in an isolated environment and make the `keniran`
+command available on PATH:
 
 ```bash
 git clone https://github.com/rkvilena/keniran
 cd keniran
-pip install .
+pipx install --python 3.11 .
+# or:
+uv tool install --python 3.11 .
 ```
 
-This installs the `keniran` command. No virtualenv needed unless you're
-developing — see [Developing](#developing) below.
+After installation, run `keniran tui` or `keniran <APP_ID>` from a terminal;
+you do not need to activate the tool's environment. pipx or uv must be
+installed first. For contributor setup, see [Developing](#developing) below.
 
 ## Usage
 
@@ -38,7 +42,7 @@ keniran <APP_ID>
 `generated/system_spec.json`; later runs reuse the cache. Pass
 `--refresh-spec` to force a fresh audit.
 
-## TUI (1.1.0)
+## TUI (1.2.0)
 
 `keniran tui` launches a terminal UI that renders the same `Report` as the
 one-shot CLI. `keniran <APP_ID>` is unchanged and remains the default — the TUI
@@ -46,22 +50,25 @@ is an alternative front end, not a replacement.
 
 The home screen is a centered brand hero: the ASCII-art `keniran` wordmark
 shaded in a left→right gray gradient, with a small muted subtitle beneath it —
-"Can I run it? Enter the target game's Steam App ID to audit this PC." — above
-the App ID input and its **Reset** button, grouped in one bordered command box.
+“Can I run it? Enter the game's Steam App ID, then press Enter to check this PC
+against its minimum requirements.” — above the App ID input and its **Check**
+and **Reset** buttons, grouped in one bordered command box.
 A terminal too small for the full six-row wordmark gets a compact four-row
 fallback instead, re-applied on resize. The palette is a near-black gray
 monochrome with exactly one amber accent (the default theme is `keniran`), and
 the home block and results share one vertically scrollable body, so short
 terminals scroll long content into view instead of clipping it.
 
-Type a Steam App ID and press **Enter** to submit. The check runs in a
-background worker, so the UI stays responsive; while it runs, a status line
-names the app id. Results replace the hero: as soon as a status line, a report,
-or an error is mounted, the hero steps aside and the results area shows:
+Type a Steam App ID and press **Enter** or click **Check** to submit. The check
+runs in a background worker, so the UI stays responsive; while it runs, a
+status line names the app id. Results replace the hero: as soon as a status
+line, a report, or an error is mounted, the hero steps aside and the results
+area shows:
 
 - the per-component verdict table (required vs your system, result, notes);
 - `unverified ⚠` rows, which are excluded from the verdict rather than guessed;
-- `⚡` best-guess badges with the match confidence for fuzzy-matched names;
+- `🔎` benchmark-match markers with a match-confidence percentage; the result
+  compares your system with that benchmark;
 - the single-thread CPU warning when multi-thread performance passes but ST is
   below ~70%;
 - the bold verdict percentage at the bottom (or the graceful "No PC

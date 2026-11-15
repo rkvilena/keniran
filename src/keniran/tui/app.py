@@ -32,10 +32,10 @@ The home screen is the branded entry point: a centered hero holding the
 ``keniran`` ASCII-art wordmark (:mod:`keniran.tui.branding`) and the subtitle,
 above the App ID control grouped in one bordered command box that hugs its
 controls (never a fixed wide span). A single blank row separates the panel from
-the first results line. Enter in the
-input submits the check; Reset (the button in the command box, or Esc
-anywhere) restores the home screen — the hero reappears and the App ID input
-and the results area are cleared. The wordmark is the full six-row art when
+the first results line. Enter in the input or the Check button submits the
+check; Reset (the button in the command box, or Esc anywhere) restores the home
+screen — the hero reappears and the App ID input and results area are cleared.
+The wordmark is the full six-row art when
 the terminal fits it and the compact four-row fallback otherwise, re-applied
 on mount and on every resize. The branding is
 presentation only; every id, handler and worker contract below is unchanged.
@@ -72,6 +72,7 @@ from keniran.tui import branding
 from keniran.tui.theme import KENIRAN_THEME_NAME, register_keniran_theme
 
 APP_ID_INPUT_ID: Final = "app-id-input"
+CHECK_BUTTON_ID: Final = "check-button"
 RESET_BUTTON_ID: Final = "reset-button"
 STATUS_ID: Final = "check-status"
 RESULTS_ID: Final = "results"
@@ -91,7 +92,10 @@ COMMAND_BOX_CENTER_ID: Final = "command-box-center"
 RULE_CENTER_ID: Final = "keniran-rule-center"
 BODY_ID: Final = "body"
 
-SUBTITLE: Final = "Can I run it? Enter the target game's Steam App ID to audit this PC."
+SUBTITLE: Final = (
+    "Can I run it? Enter the game's Steam App ID, then press Enter to check this PC "
+    "against its minimum requirements."
+)
 
 # The full wordmark is 38 columns wide and 6 rows tall; it is only shown on
 # terminals large enough to keep the whole home block visible without scrolling,
@@ -101,7 +105,7 @@ WORDMARK_MIN_HEIGHT: Final = 22
 
 
 class KeniranTui(App[None]):
-    """Minimal keniran TUI shell: app-id input (Enter submits), results, Reset/Esc."""
+    """Minimal keniran TUI shell: app-id input, Check/Enter submission, Reset/Esc."""
 
     TITLE = "keniran"
     SUB_TITLE = "Can I run it?"
@@ -270,6 +274,7 @@ class KeniranTui(App[None]):
                         id=APP_ID_INPUT_ID,
                         restrict=r"[0-9]*",
                     )
+                    yield Button("Check", id=CHECK_BUTTON_ID)
                     yield Button("Reset", id=RESET_BUTTON_ID)
             yield Container(id=RESULTS_ID)
         # ``show_command_palette=False`` drops the Footer's docked right-side
@@ -314,10 +319,11 @@ class KeniranTui(App[None]):
         await self._request_check()
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:
-        """Handle the Reset button (the only button press the shell knows)."""
-        if event.button.id != RESET_BUTTON_ID:
-            return
-        await self._reset()
+        """Submit a check or restore home from the corresponding button."""
+        if event.button.id == CHECK_BUTTON_ID:
+            await self._request_check()
+        elif event.button.id == RESET_BUTTON_ID:
+            await self._reset()
 
     async def action_reset(self) -> None:
         """Run the reset for the Esc binding (the same reset as the button)."""
@@ -351,8 +357,8 @@ class KeniranTui(App[None]):
         An invalid app id never starts a worker: the inline validation message
         (the TUI counterpart of the CLI's ``_fail``) replaces the results
         instead. A second request while a check is in flight is ignored: the
-        worker guard drops the duplicate Enter submission until the running
-        check finishes.
+            worker guard drops duplicate submissions until the running check
+            finishes.
         """
         entered = self.query_one(f"#{APP_ID_INPUT_ID}", Input).value
         raw = entered.strip()
