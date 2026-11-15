@@ -30,7 +30,9 @@ the scrollable body.
 
 The home screen is the branded entry point: a centered hero holding the
 ``keniran`` ASCII-art wordmark (:mod:`keniran.tui.branding`) and the subtitle,
-above the App ID control grouped in one bordered command box. Enter in the
+above the App ID control grouped in one bordered command box that hugs its
+controls (never a fixed wide span). A single blank row separates the panel from
+the first results line. Enter in the
 input submits the check; Reset (the button in the command box, or Esc
 anywhere) restores the home screen — the hero reappears and the App ID input
 and the results area are cleared. The wordmark is the full six-row art when
@@ -189,13 +191,18 @@ class KeniranTui(App[None]):
         border: round $panel;
         background: $surface;
         height: auto;
-        width: 80;
+        /* Hug the controls instead of spanning a fixed wide panel; the
+           max-width keeps the box inside narrow terminals. */
+        width: auto;
         max-width: 100%;
         margin-top: 1;
+        /* A single blank row between the panel and the first results line. */
+        margin-bottom: 1;
         padding: 0 1;
     }
 
     #app-id-row {
+        width: auto;
         height: auto;
     }
 

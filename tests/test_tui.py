@@ -38,6 +38,7 @@ from keniran.cli.app import app as cli
 from keniran.core import scoring
 from keniran.core.models import ComponentName, ComponentRow, Report, SystemSpec
 from keniran.rendering.report_view import (
+    BADGE_NOTE,
     ST_WARNING_NOTE,
     UNVERIFIED_NOTE,
     badge_text,
@@ -284,18 +285,27 @@ def test_app_id_control_is_grouped_in_the_command_box() -> None:
             assert border_color.hex == tui.get_css_variables()["panel"]
             assert box.styles.background.hex == tui.get_css_variables()["surface"]
 
-            # The fixed-width panel is centered as one block; its controls stay
-            # arranged from the left inside the panel.
-            assert box.styles.width.value == 80
+            # The panel hugs its controls instead of a fixed wide width, stays
+            # centered as one block, and leaves a gap below before the results.
+            assert box.styles.is_auto_width is True
             assert box.styles.margin.top == 1
-            assert box.styles.margin.bottom == 0
+            assert box.styles.margin.bottom == 1
             assert box.region.x == (tui.size.width - box.region.width) // 2
+            assert box.region.right <= tui.size.width
 
             # Both controls keep a real, visible region inside the box.
             assert app_id_input.region.width > 0
             assert reset_button.region.width > 0
             assert app_id_input.region.x == box.region.x + 2
             assert reset_button.region.x > app_id_input.region.x
+
+            # Width hugs the controls: input + Reset (with its left margin) plus
+            # the panel's horizontal padding and border, never a wide fixed span.
+            chrome = 2 + 2  # padding (1 each side) + border (1 each side)
+            assert box.region.width == (
+                app_id_input.region.width + 2 + reset_button.region.width + chrome
+            )
+            assert box.region.width < box_center.region.width
 
     _run(scenario())
 
@@ -794,11 +804,12 @@ def test_completed_check_mounts_the_shared_report_renderables(
             assert actual_cells[0] == ("CPU", "GPU", "RAM")
             assert actual_cells[2][0] == "Intel Core i7-9700K"
             assert actual_cells[4][0] == badge_text(full_report.components[0])
-            assert "⚡" in actual_cells[4][0]
+            assert "🔎" in actual_cells[4][0]
 
             texts = [item.plain for item in mounted if isinstance(item, Text)]
             assert full_report.verdict is not None
             assert full_report.verdict.percentage_text in texts
+            assert BADGE_NOTE in texts
             assert "⚠ GPU: " + UNVERIFIED_NOTE in texts
             assert ST_WARNING_NOTE in texts
 
@@ -887,6 +898,8 @@ def test_results_replace_the_hero_and_reset_restores_the_home_screen(
             top_aligned_y = home.styles.padding.top + box.styles.margin.top
             await _wait_until(lambda: box.region.y == home.region.y + top_aligned_y, pilot)
             assert box.region.y < hero_top
+            # A modest blank row separates the panel from the first result line.
+            assert results.children[0].region.y - box.region.bottom >= 1
             # The command box (and the input in it) stays visible throughout.
             assert box.region.height > 0
             assert app_id_input.region.width > 0

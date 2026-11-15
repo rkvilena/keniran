@@ -20,6 +20,7 @@ from keniran.cli.app import render_report
 from keniran.core import scoring
 from keniran.core.models import ComponentName, ComponentRow, Report
 from keniran.rendering.report_view import (
+    BADGE_NOTE,
     ST_WARNING_NOTE,
     UNVERIFIED_NOTE,
     badge_text,
@@ -106,12 +107,24 @@ def test_full_verdict_report_returns_ordered_renderables(full_report: Report) ->
 
     renderables = report_renderables(full_report)
 
-    assert len(renderables) == 6
-    title, table, unverified_line, st_warning_line, blank_line, verdict_line = renderables
+    assert len(renderables) == 7
+    (
+        title,
+        table,
+        badge_line,
+        unverified_line,
+        st_warning_line,
+        blank_line,
+        verdict_line,
+    ) = renderables
 
     assert isinstance(title, Text)
     assert title.plain == f"Example Game (Steam app {APP_ID})"
     assert title.style == "bold"
+
+    assert isinstance(badge_line, Text)
+    assert badge_line.plain == BADGE_NOTE
+    assert badge_line.style == "dim"
 
     assert isinstance(table, Table)
     assert [column.header for column in table.columns] == [
@@ -126,7 +139,7 @@ def test_full_verdict_report_returns_ordered_renderables(full_report: Report) ->
         ("Intel Core i5-2300", "unverified", "8 GB"),
         ("Intel Core i7-9700K", "NVIDIA GeForce GTX 1060 6GB", "16 GB"),
         ("100% (meets requirement)", "unverified", "meets requirement"),
-        ("⚡ 'Intel Core i5-2300 @ 2.80GHz' (100%)", "", ""),
+        ("🔎 'Intel Core i5-2300 @ 2.80GHz' (100%)", "", ""),
     ]
 
     assert isinstance(unverified_line, Text)
@@ -148,11 +161,12 @@ def test_full_verdict_report_renders_renderables_in_order(full_report: Report) -
 
     title_at = output.index(f"Example Game (Steam app {APP_ID})")
     table_at = output.index("Component")
+    badge_at = output.index(BADGE_NOTE)
     unverified_at = output.index(f"⚠ GPU: {UNVERIFIED_NOTE}")
     st_warning_at = output.index(ST_WARNING_NOTE)
     verdict_at = output.index("100% of the game's minimum requirement")
 
-    assert title_at < table_at < unverified_at < st_warning_at < verdict_at
+    assert title_at < table_at < badge_at < unverified_at < st_warning_at < verdict_at
 
 
 def test_message_line_precedes_the_verdict(full_report: Report) -> None:
@@ -226,7 +240,7 @@ def test_badge_text_shows_the_matched_name_without_confidence() -> None:
         matched_name="Intel Core i5-2300",
     )
 
-    assert badge_text(row) == "⚡ 'Intel Core i5-2300'"
+    assert badge_text(row) == "🔎 'Intel Core i5-2300'"
 
 
 def test_badge_text_shows_the_matched_name_and_confidence() -> None:
@@ -238,4 +252,4 @@ def test_badge_text_shows_the_matched_name_and_confidence() -> None:
         confidence=0.98,
     )
 
-    assert badge_text(row) == "⚡ 'Intel Core i5-2300' (98%)"
+    assert badge_text(row) == "🔎 'Intel Core i5-2300' (98%)"

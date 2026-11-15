@@ -20,6 +20,7 @@ from keniran.adapters import steam
 from keniran.cli.app import ST_WARNING_NOTE, app, render_report
 from keniran.core import scoring
 from keniran.core.models import ComponentName, ComponentRow, Report, VerdictBand
+from keniran.rendering.report_view import BADGE_NOTE
 from keniran.services.check_game import NO_REQUIREMENTS_MESSAGE
 
 APP_ID = 72850
@@ -227,7 +228,8 @@ def test_pass_report_renders_table_verdict_and_caps_display_percent() -> None:
     assert "125%" not in output
     assert "150%" not in output
 
-    assert "⚡ 'NVIDIA GeForce GTX 650 Ti' (98%)" in output
+    assert "🔎 'NVIDIA GeForce GTX 650 Ti' (98%)" in output
+    assert BADGE_NOTE in output
     assert "100% of the game's minimum requirement (Pass — meets requirement)" in output
     assert "Single-thread" not in output
 

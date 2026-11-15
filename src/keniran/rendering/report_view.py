@@ -6,8 +6,9 @@ functions here are pure presentation — no console, no I/O, and no scoring
 beyond the canonical :mod:`keniran.core.scoring` helpers — so the one-shot CLI
 and any future UI render the same objects in the same order.
 
-Honesty semantics live here once: ⚠ unverified rows, ⚡ best-guess confidence
-badges, the single-thread warning, and graceful message-only reports.
+Honesty semantics live here once: ⚠ unverified rows, 🔎 matched-benchmark
+confidence badges (with a subdued legend), the single-thread warning, and
+graceful message-only reports.
 """
 
 from __future__ import annotations
@@ -25,6 +26,11 @@ UNVERIFIED_NOTE: Final = "unverified — manual review suggested"
 ST_WARNING_NOTE: Final = (
     "⚠ Warning: Single-thread performance is below 70% of the required CPU score."
 )
+BADGE_NOTE: Final = (
+    "🔎 marks the benchmark match for the listed CPU/GPU requirement; its % is "
+    "match confidence. Result compares your system with that benchmark."
+)
+BADGE_NOTE_STYLE: Final = "dim"
 
 
 def result_text(row: ComponentRow) -> str:
@@ -42,12 +48,12 @@ def result_text(row: ComponentRow) -> str:
 
 
 def badge_text(row: ComponentRow) -> str:
-    """Return the confidence badge for a matched (possibly best-guess) name."""
+    """Return the 🔎 confidence badge for a matched (possibly best-guess) name."""
     if row.matched_name is None:
         return ""
     if row.confidence is None:
-        return f"⚡ {row.matched_name!r}"
-    return f"⚡ {row.matched_name!r} ({row.confidence:.0%})"
+        return f"🔎 {row.matched_name!r}"
+    return f"🔎 {row.matched_name!r} ({row.confidence:.0%})"
 
 
 def _component_table(report: Report) -> Table:
@@ -73,9 +79,10 @@ def report_renderables(report: Report) -> list[RenderableType]:
     """Return the ordered rich renderables that render *report*.
 
     The sequence matches the CLI output exactly: the title line, the component
-    table, one ⚠ line per unverified row, the single-thread warning, the
-    graceful message, and finally the blank line plus bold verdict percentage.
-    A message-only report (no requirements published) yields just its message.
+    table, the subdued badge legend (🔎 match explanation), one ⚠ line per
+    unverified row, the single-thread warning, the graceful message, and finally
+    the blank line plus bold verdict percentage. A message-only report (no
+    requirements published) yields just its message.
     """
     if report.message is not None and report.verdict is None and not report.components:
         return [Text(report.message)]
@@ -86,6 +93,7 @@ def report_renderables(report: Report) -> list[RenderableType]:
 
     if report.components:
         renderables.append(_component_table(report))
+        renderables.append(Text(BADGE_NOTE, style=BADGE_NOTE_STYLE))
         for row in report.components:
             if row.unverified:
                 renderables.append(Text(f"⚠ {row.component.value}: {UNVERIFIED_NOTE}"))
