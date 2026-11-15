@@ -24,7 +24,7 @@ The app paints itself with the custom ``keniran`` theme
 (:mod:`keniran.tui.theme`): a near-black gray monochrome with exactly one amber
 role. The theme is registered and selected in ``__init__`` (register first,
 then select through the ``theme`` reactive), so the built-ins — including
-``tokyo-night`` — remain selectable from the command palette (Ctrl+P). The
+``tokyo-night`` — remain selectable from the command palette (F1). The
 shell carries no Header chrome: the Footer with key hints stays docked under
 the scrollable body.
 
@@ -40,8 +40,11 @@ presentation only; every id, handler and worker contract below is unchanged.
 
 The home block and the results area share one vertically scrollable body, so
 short terminal heights scroll long content into view instead of clipping it.
-The scroll region is not focusable, which keeps the App ID input as the
-first-focused widget on mount.
+While the home screen is showing, that body vertically centers the whole home
+block (wordmark, subtitle and command box) as one group in the space above the
+docked Footer; the centering is dropped as soon as the hero is hidden, so the
+results keep their usual top-aligned position. The scroll region is not
+focusable, which keeps the App ID input as the first-focused widget on mount.
 """
 
 from __future__ import annotations
@@ -75,6 +78,10 @@ ERROR_STYLE: Final = "bold red"
 
 HERO_ID: Final = "hero"
 HERO_HIDDEN_CLASS: Final = "hidden"
+# Applied to the scrollable body while the home screen is showing, so the whole
+# home block is centered in the space above the Footer (dropped once the hero
+# is hidden so results stay top-aligned).
+BODY_HOME_ACTIVE_CLASS: Final = "home-active"
 WORDMARK_ID: Final = "keniran-wordmark"
 SUBTITLE_ID: Final = "keniran-subtitle"
 COMMAND_BOX_ID: Final = "command-box"
@@ -98,11 +105,14 @@ class KeniranTui(App[None]):
     SUB_TITLE = "Can I run it?"
 
     # Esc is the keyboard twin of the Reset button (R12): both restore the
-    # home screen, so the reset is always one keystroke away. The base App
-    # bindings (Ctrl+P palette, Ctrl+Q quit) merge with these.
+    # home screen, so the reset is always one keystroke away. F1 is the single
+    # key that opens the command palette; because this "Menu" binding already
+    # carries the ``command_palette`` action, the base App does not add a second
+    # palette binding. Ctrl+Q still quits.
+    COMMAND_PALETTE_BINDING: ClassVar[str] = "f1"
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("escape", "reset", "Reset", show=True),
-        Binding("ctrl+p", "command_palette", "Menu", show=True),
+        Binding("f1", "command_palette", "Menu", show=True),
         Binding("ctrl+q", "quit", "Quit", show=False),
     ]
 
@@ -114,6 +124,17 @@ class KeniranTui(App[None]):
     #body {
         width: 1fr;
         height: 1fr;
+    }
+
+    #body.home-active {
+        align-vertical: middle;
+    }
+
+    /* While the home screen is centered, the empty results area collapses so
+       the home block itself is what gets centered (results regain their own
+       reserved height the moment the hero is hidden). */
+    #body.home-active #results {
+        min-height: 0;
     }
 
     #home {
@@ -223,7 +244,7 @@ class KeniranTui(App[None]):
         self._check_worker: Worker[Report] | None = None
 
     def compose(self) -> ComposeResult:
-        with VerticalScroll(id=BODY_ID, can_focus=False):
+        with VerticalScroll(id=BODY_ID, can_focus=False, classes=BODY_HOME_ACTIVE_CLASS):
             with Vertical(id="home"):
                 # The hero starts empty: on_mount applies the wordmark variant
                 # (full art or the compact fallback) that fits the terminal.
@@ -244,7 +265,9 @@ class KeniranTui(App[None]):
                     )
                     yield Button("Reset", id=RESET_BUTTON_ID)
             yield Container(id=RESULTS_ID)
-        yield Footer()
+        # ``show_command_palette=False`` drops the Footer's docked right-side
+        # palette hint: the "f1 Menu" key above is the one menu entry shown.
+        yield Footer(show_command_palette=False)
 
     def on_mount(self) -> None:
         """Fill the wordmark once the app and the terminal size are known."""
@@ -385,7 +408,13 @@ class KeniranTui(App[None]):
         await self.query_one(f"#{RESULTS_ID}", Container).remove_children()
 
     def _hide_hero(self) -> None:
-        """Hide the hero so the results occupy its space (it stays mounted)."""
+        """Hide the hero so the results occupy its space (it stays mounted).
+
+        The body stops vertically centering the home block at the same time, so
+        the command box and the results fall back to their top-aligned
+        positions while the check runs.
+        """
+        self.query_one(f"#{BODY_ID}", VerticalScroll).remove_class(BODY_HOME_ACTIVE_CLASS)
         self.query_one(f"#{HERO_ID}", Container).add_class(HERO_HIDDEN_CLASS)
 
     async def _reset(self) -> None:
@@ -396,6 +425,7 @@ class KeniranTui(App[None]):
         check can run in the same session.
         """
         self.query_one(f"#{HERO_ID}", Container).remove_class(HERO_HIDDEN_CLASS)
+        self.query_one(f"#{BODY_ID}", VerticalScroll).add_class(BODY_HOME_ACTIVE_CLASS)
         await self._clear_results()
         app_id_input = self.query_one(f"#{APP_ID_INPUT_ID}", Input)
         app_id_input.value = ""

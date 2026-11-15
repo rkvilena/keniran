@@ -96,6 +96,11 @@ async def _wait_for_check(tui: KeniranTui, pilot: Pilot) -> None:
     await pilot.pause()
 
 
+def _menu_footer_keys(footer: Footer) -> list[Any]:
+    """Return the Footer's rendered command-palette key widgets."""
+    return [key for key in footer.query("FooterKey") if key.action == "command_palette"]
+
+
 def _error_texts(tui: KeniranTui) -> list[str]:
     """Return the plain text of every inline error currently mounted."""
     return [
@@ -358,7 +363,7 @@ def test_keniran_theme_is_selected_and_repaints_when_switched() -> None:
 
     Switching must actually repaint: a token-derived widget style changes with
     the resolved theme, not just the reported name. The command palette stays
-    enabled, so Ctrl+P keeps offering the built-in theme switch.
+    enabled, so F1 keeps offering the built-in theme switch.
     """
 
     async def scenario() -> None:
@@ -381,12 +386,24 @@ def test_keniran_theme_is_selected_and_repaints_when_switched() -> None:
             assert wordmark.styles.color != keniran_color
             assert wordmark.styles.color.hex == variables["primary"]
 
-            # R8: Ctrl+P keeps the command palette (and its theme switcher).
-            # The binding label is now "Menu" instead of "Palette".
+            # R8: F1 keeps the command palette (and its theme switcher). The
+            # single-key binding is labelled "Menu".
             assert KeniranTui.ENABLE_COMMAND_PALETTE is True
-            assert KeniranTui.COMMAND_PALETTE_BINDING == "ctrl+p"
-            menu_binding = next(b for b in tui.BINDINGS if b.key == "ctrl+p")
+            assert KeniranTui.COMMAND_PALETTE_BINDING == "f1"
+            menu_binding = next(b for b in tui.BINDINGS if b.key == "f1")
             assert menu_binding.description == "Menu"
+
+            # The Footer shows exactly one Menu hint: the left-side "f1" key,
+            # never a second docked command-palette entry on the right.
+            footer = tui.query_one(Footer)
+            assert footer.show_command_palette is False
+            await _wait_until(
+                lambda: bool(_menu_footer_keys(footer)),
+                pilot,
+            )
+            menu_keys = _menu_footer_keys(footer)
+            assert len(menu_keys) == 1
+            assert menu_keys[0].key == "f1"
 
     _run(scenario())
 
@@ -415,10 +432,19 @@ def test_home_hierarchy_fits_at_the_normal_terminal_size() -> None:
             assert wordmark.region.y < rule.region.y < subtitle.region.y < box.region.y
             assert results.region.y >= box.region.bottom
 
+            # The whole home block is vertically centered in the body above the
+            # Footer: the gap above the wordmark matches the gap below the box,
+            # so the block no longer hugs the top edge.
+            body = tui.query_one(f"#{BODY_ID}", VerticalScroll)
+            gap_above = wordmark.region.y - body.region.y
+            gap_below = body.region.bottom - box.region.bottom
+            assert abs(gap_above - gap_below) <= 1
+            assert gap_above > 0
+            assert gap_above > box.styles.margin.top
+
             # Everything fits inside the visible screen at the normal size.
             assert box.region.bottom <= tui.size.height
             assert results.region.bottom <= tui.size.height
-            assert results.region.height > 0
             assert len(results.children) == 0
 
     _run(scenario())
@@ -856,7 +882,11 @@ def test_results_replace_the_hero_and_reset_restores_the_home_screen(
             assert hero in list(home.children)
             await _wait_until(lambda: hero.region.height == 0, pilot)
             assert len(results.children) > 0
-            await _wait_until(lambda: box.region.y == hero_top + box.styles.margin.top, pilot)
+            # The body stops centering once the hero is hidden, so the command
+            # box drops back to its top-aligned spot above the results.
+            top_aligned_y = home.styles.padding.top + box.styles.margin.top
+            await _wait_until(lambda: box.region.y == home.region.y + top_aligned_y, pilot)
+            assert box.region.y < hero_top
             # The command box (and the input in it) stays visible throughout.
             assert box.region.height > 0
             assert app_id_input.region.width > 0
