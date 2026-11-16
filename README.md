@@ -25,9 +25,18 @@ pipx install --python 3.11 .
 uv tool install --python 3.11 .
 ```
 
-After installation, run `keniran tui` or `keniran <APP_ID>` from a terminal;
-you do not need to activate the tool's environment. pipx or uv must be
-installed first. For contributor setup, see [Developing](#developing) below.
+The tool and its dependencies are isolated from your other Python environments;
+you can run `keniran tui` or `keniran <APP_ID>` from any directory without
+activating an environment. Installing from `.` uses this checkout, but does not
+track later source changes; reinstall to pick them up.
+
+To uninstall, run `pipx uninstall keniran` or, if installed with uv,
+`uv tool uninstall keniran`.
+
+On Windows, if `pipx` is not recognized, prefix its commands with `py -m`
+(for example, `py -m pipx install --python 3.11 .`). If `keniran` is not
+recognized after installing with pipx, run `py -m pipx ensurepath` and open a
+new terminal. For contributor setup, see [Developing](#developing) below.
 
 ## Usage
 
