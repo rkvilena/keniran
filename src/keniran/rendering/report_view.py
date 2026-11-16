@@ -20,7 +20,7 @@ from rich.table import Table
 from rich.text import Text
 
 from keniran.core import scoring
-from keniran.core.models import ComponentRow, Report
+from keniran.core.models import ComponentRow, Report, VerdictBand
 
 UNVERIFIED_NOTE: Final = "unverified — manual review suggested"
 ST_WARNING_NOTE: Final = (
@@ -31,6 +31,15 @@ BADGE_NOTE: Final = (
     "match confidence. Result compares your system with that benchmark."
 )
 BADGE_NOTE_STYLE: Final = "dim"
+
+# Presentation palette shared by every renderer. The amber, muted green, and
+# muted red match the ``keniran`` theme's accent/success/error roles; unverified
+# results stay neutral instead of borrowing a status hue.
+AMBER_COLOR: Final = "#E0A64B"
+PASS_COLOR: Final = "#7FA97F"
+FAIL_COLOR: Final = "#C96A6A"
+UNVERIFIED_STYLE: Final = "dim"
+
 
 
 def result_text(row: ComponentRow) -> str:
@@ -47,6 +56,37 @@ def result_text(row: ComponentRow) -> str:
     return "unverified"
 
 
+def result_style(row: ComponentRow) -> str:
+    """Return the semantic color for one component Result cell.
+
+    Verified ratios follow the scoring bands (Pass green, Borderline/Poor
+    amber, Unplayable red); hard-check rows follow their pass state
+    (True green, False red). Anything unverified stays neutral.
+    """
+    if row.ratio is not None:
+        if row.ratio >= scoring.PASS_RATIO:
+            return PASS_COLOR
+        if row.ratio >= scoring.POOR_RATIO:
+            return AMBER_COLOR
+        return FAIL_COLOR
+    if row.passed is True:
+        return PASS_COLOR
+    if row.passed is False:
+        return FAIL_COLOR
+    return UNVERIFIED_STYLE
+
+
+def verdict_style(band: VerdictBand) -> str:
+    """Return the semantic color for the overall verdict band."""
+    if band is VerdictBand.PASS:
+        return PASS_COLOR
+    if band in (VerdictBand.BORDERLINE, VerdictBand.POOR):
+        return AMBER_COLOR
+    if band in (VerdictBand.UNPLAYABLE, VerdictBand.FAIL):
+        return FAIL_COLOR
+    return UNVERIFIED_STYLE
+
+
 def badge_text(row: ComponentRow) -> str:
     """Return the 🔎 confidence badge for a matched (possibly best-guess) name."""
     if row.matched_name is None:
@@ -57,8 +97,8 @@ def badge_text(row: ComponentRow) -> str:
 
 
 def _component_table(report: Report) -> Table:
-    """Build the per-component comparison table."""
-    table = Table(show_header=True, header_style="bold")
+    """Build the per-component comparison table with semantic result colors."""
+    table = Table(show_header=True, header_style="bold", border_style=AMBER_COLOR)
     table.add_column("Component")
     table.add_column("Required")
     table.add_column("Your System")
@@ -69,7 +109,7 @@ def _component_table(report: Report) -> Table:
             row.component.value,
             row.required_value,
             row.user_value,
-            result_text(row),
+            Text(result_text(row), style=result_style(row)),
             badge_text(row),
         )
     return table
@@ -88,7 +128,7 @@ def report_renderables(report: Report) -> list[RenderableType]:
         return [Text(report.message)]
 
     renderables: list[RenderableType] = [
-        Text(f"{report.game_name} (Steam app {report.app_id})", style="bold")
+        Text(f"{report.game_name} (Steam app {report.app_id})", style=f"bold {AMBER_COLOR}")
     ]
 
     if report.components:
@@ -105,6 +145,11 @@ def report_renderables(report: Report) -> list[RenderableType]:
 
     if report.verdict is not None:
         renderables.append(Text())
-        renderables.append(Text(report.verdict.percentage_text, style="bold"))
+        renderables.append(
+            Text(
+                report.verdict.percentage_text,
+                style=f"bold {verdict_style(report.verdict.band)}",
+            )
+        )
 
     return renderables

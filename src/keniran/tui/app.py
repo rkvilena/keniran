@@ -87,6 +87,7 @@ HERO_HIDDEN_CLASS: Final = "hidden"
 BODY_HOME_ACTIVE_CLASS: Final = "home-active"
 WORDMARK_ID: Final = "keniran-wordmark"
 SUBTITLE_ID: Final = "keniran-subtitle"
+SUBTITLE_CENTER_ID: Final = "keniran-subtitle-center"
 COMMAND_BOX_ID: Final = "command-box"
 COMMAND_BOX_CENTER_ID: Final = "command-box-center"
 RULE_CENTER_ID: Final = "keniran-rule-center"
@@ -179,6 +180,13 @@ class KeniranTui(App[None]):
         padding: 0 0 1 0;
     }
 
+    #keniran-subtitle-center {
+        width: 1fr;
+        height: auto;
+    }
+
+    /* The width is synced to the command box at runtime, so long copy wraps
+       inside the same horizontal span instead of running past the panel. */
     #keniran-subtitle {
         color: $text-muted;
         height: auto;
@@ -212,6 +220,28 @@ class KeniranTui(App[None]):
 
     #app-id-input {
         width: 32;
+    }
+
+    #check-button {
+        background: $accent;
+        color: $background;
+        border: tall $accent;
+        margin-left: 2;
+    }
+
+    /* Darker amber feedback for pointer and keyboard users; the base fill
+       stays the theme accent. */
+    #check-button:hover {
+        background: $accent-darken-1;
+        color: $background;
+        border: tall $accent-darken-1;
+    }
+
+    #check-button.-active {
+        background: $accent-darken-2;
+        color: $background;
+        border: tall $accent-darken-2;
+        tint: transparent;
     }
 
     #reset-button {
@@ -263,7 +293,8 @@ class KeniranTui(App[None]):
                     yield Static("", id=WORDMARK_ID, classes="brand-wordmark")
                     with Center(id=RULE_CENTER_ID):
                         yield Rule(id="keniran-rule")
-                    yield Static(SUBTITLE, id=SUBTITLE_ID, classes="brand-subtitle")
+                    with Center(id=SUBTITLE_CENTER_ID):
+                        yield Static(SUBTITLE, id=SUBTITLE_ID, classes="brand-subtitle")
                 with (
                     Center(id=COMMAND_BOX_CENTER_ID),
                     Container(id=COMMAND_BOX_ID, classes="command-box"),
@@ -284,10 +315,28 @@ class KeniranTui(App[None]):
     def on_mount(self) -> None:
         """Fill the wordmark once the app and the terminal size are known."""
         self._apply_wordmark(self.size)
+        self.call_after_refresh(self._fit_subtitle)
 
     def on_resize(self, event: events.Resize) -> None:
         """Re-apply the wordmark whenever the terminal is resized."""
         self._apply_wordmark(event.size)
+        self.call_after_refresh(self._fit_subtitle)
+
+    def _fit_subtitle(self) -> None:
+        """Match the subtitle width to the command box so long copy wraps.
+
+        The command box hugs its controls, so its width is only known after
+        layout. The subtitle shares that width (and stays centered by its
+        wrapper), which keeps the copy inside the panel's span at every
+        terminal size instead of stretching across the whole home screen.
+        """
+        if not self.screen_stack or not self.query(f"#{SUBTITLE_ID}"):
+            return
+        box = self.query_one(f"#{COMMAND_BOX_ID}", Container)
+        subtitle = self.query_one(f"#{SUBTITLE_ID}", Static)
+        width = box.region.width
+        if width > 0 and subtitle.styles.width != width:
+            subtitle.styles.width = width
 
     def _apply_wordmark(self, size: Size) -> None:
         """Show the full or compact wordmark variant that fits *size*.

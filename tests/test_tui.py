@@ -59,6 +59,7 @@ from keniran.tui.app import (
     RULE_CENTER_ID,
     STATUS_ID,
     SUBTITLE,
+    SUBTITLE_CENTER_ID,
     SUBTITLE_ID,
     WORDMARK_ID,
     KeniranTui,
@@ -233,6 +234,7 @@ def test_home_screen_shows_the_keniran_brand_block() -> None:
             rule_center = tui.query_one(f"#{RULE_CENTER_ID}", Center)
             rule = tui.query_one("#keniran-rule", Rule)
             subtitle = tui.query_one(f"#{SUBTITLE_ID}", Static)
+            subtitle_center = tui.query_one(f"#{SUBTITLE_CENTER_ID}", Center)
             # The hero and centered command-box wrapper are siblings in #home.
             assert hero in list(home.children)
             box = tui.query_one(f"#{COMMAND_BOX_ID}", Container)
@@ -242,6 +244,8 @@ def test_home_screen_shows_the_keniran_brand_block() -> None:
             assert box not in list(hero.children)
             assert rule_center in list(hero.children)
             assert rule in list(rule_center.children)
+            assert subtitle_center in list(hero.children)
+            assert subtitle in list(subtitle_center.children)
 
             # The wordmark is the ASCII art (the default 80x24 terminal shows
             # the full six-row variant).
@@ -256,6 +260,17 @@ def test_home_screen_shows_the_keniran_brand_block() -> None:
                 "check this PC against its minimum requirements."
             )
             assert str(subtitle.content) == SUBTITLE
+
+            # The subtitle shares the command box's span: long copy wraps
+            # inside the panel width rather than stretching to the home edge.
+            await _wait_until(
+                lambda: subtitle.region.width == box.region.width and box.region.width > 0,
+                pilot,
+            )
+            assert subtitle.region.width == box.region.width
+            assert subtitle.region.width < home.region.width
+            assert subtitle.region.height > 1
+            assert subtitle.region.x == box.region.x
 
             # The brand block is stacked above the command box, never in #results,
             # which stays empty on mount.
@@ -306,6 +321,11 @@ def test_app_id_control_is_grouped_in_the_command_box() -> None:
             assert check_button.region.x >= app_id_input.region.right
             assert reset_button.region.x >= check_button.region.right
 
+            # The App ID-to-Check and Check-to-Reset gaps are equal.
+            input_check_gap = check_button.region.x - app_id_input.region.right
+            check_reset_gap = reset_button.region.x - check_button.region.right
+            assert input_check_gap == check_reset_gap == 2
+
             # Width hugs the controls, including their actual gaps and the
             # panel's horizontal padding and border, never a fixed wide span.
             chrome = 2 + 2  # padding (1 each side) + border (1 each side)
@@ -345,9 +365,11 @@ def test_branded_styles_use_textual_theme_tokens() -> None:
             assert tui.available_themes[KENIRAN_THEME_NAME].accent == "#E0A64B"
             assert variables["accent"] == "#DFA64B"
 
-            # Exactly one amber accent (R1): the $accent token paints only the
-            # Reset button border, and it really resolves to the theme amber.
-            assert KeniranTui.CSS.count("$accent") == 1
+            # The amber accent fills Check and borders Reset; both resolve to
+            # the theme accent rather than a hard-coded colour.
+            check_button = tui.query_one(f"#{CHECK_BUTTON_ID}", Button)
+            assert check_button.styles.background.hex == variables["accent"]
+            assert check_button.styles.border_top[1].hex == variables["accent"]
             reset_button = tui.query_one(f"#{RESET_BUTTON_ID}", Button)
             assert reset_button.styles.border_top[1].hex == variables["accent"]
 
@@ -371,6 +393,38 @@ def test_branded_styles_use_textual_theme_tokens() -> None:
             assert rule.styles.width.value == 40
             assert wordmark.styles.text_align == "center"
             assert subtitle.styles.text_align == "center"
+
+    _run(scenario())
+
+
+def test_check_button_uses_amber_with_darker_hover_and_pressed_feedback() -> None:
+    async def scenario() -> None:
+        tui = KeniranTui()
+        async with tui.run_test() as pilot:
+            variables = tui.get_css_variables()
+            check_button = tui.query_one(f"#{CHECK_BUTTON_ID}", Button)
+
+            # Resting Check is filled with the theme amber accent.
+            base = check_button.styles.background
+            assert base.hex == variables["accent"]
+
+            # Hover uses a darker amber derived from the same accent.
+            assert await pilot.hover(check_button)
+            await pilot.pause()
+            hover = check_button.styles.background
+            assert hover.hex == variables["accent-darken-1"]
+            assert hover.hex != base.hex
+
+            # The pressed state darkens further, keeping amber as the base.
+            check_button.add_class("-active")
+            await pilot.pause()
+            pressed = check_button.styles.background
+            assert pressed.hex == variables["accent-darken-2"]
+
+            check_button.remove_class("-active")
+            await pilot.hover(tui.query_one(f"#{APP_ID_INPUT_ID}", Input))
+            await pilot.pause()
+            assert check_button.styles.background.hex == variables["accent"]
 
     _run(scenario())
 
@@ -445,7 +499,9 @@ def test_home_hierarchy_fits_at_the_normal_terminal_size() -> None:
             assert wordmark in list(hero.children)
             assert tui.query_one(f"#{RULE_CENTER_ID}", Center) in list(hero.children)
             assert rule in list(tui.query_one(f"#{RULE_CENTER_ID}", Center).children)
-            assert subtitle in list(hero.children)
+            subtitle_center = tui.query_one(f"#{SUBTITLE_CENTER_ID}", Center)
+            assert subtitle_center in list(hero.children)
+            assert subtitle in list(subtitle_center.children)
             assert wordmark.region.y < rule.region.y < subtitle.region.y < box.region.y
             assert results.region.y >= box.region.bottom
 
@@ -834,8 +890,20 @@ def test_completed_check_mounts_the_shared_report_renderables(
 
             actual_table = next(item for item in mounted if isinstance(item, Table))
             expected_table = next(item for item in expected if isinstance(item, Table))
-            actual_cells = [tuple(column.cells) for column in actual_table.columns]
-            expected_cells = [tuple(column.cells) for column in expected_table.columns]
+            actual_cells = [
+                tuple(
+                    cell.plain if isinstance(cell, Text) else cell
+                    for cell in column.cells
+                )
+                for column in actual_table.columns
+            ]
+            expected_cells = [
+                tuple(
+                    cell.plain if isinstance(cell, Text) else cell
+                    for cell in column.cells
+                )
+                for column in expected_table.columns
+            ]
             assert [column.header for column in actual_table.columns] == [
                 column.header for column in expected_table.columns
             ]

@@ -18,14 +18,20 @@ from rich.text import Text
 
 from keniran.cli.app import render_report
 from keniran.core import scoring
-from keniran.core.models import ComponentName, ComponentRow, Report
+from keniran.core.models import ComponentName, ComponentRow, Report, Verdict, VerdictBand
 from keniran.rendering.report_view import (
+    AMBER_COLOR,
     BADGE_NOTE,
+    FAIL_COLOR,
+    PASS_COLOR,
     ST_WARNING_NOTE,
     UNVERIFIED_NOTE,
+    UNVERIFIED_STYLE,
     badge_text,
     report_renderables,
+    result_style,
     result_text,
+    verdict_style,
 )
 from keniran.services.check_game import NO_REQUIREMENTS_MESSAGE
 
@@ -93,6 +99,7 @@ def test_message_only_report_returns_a_single_message_renderable(
     message = renderables[0]
     assert isinstance(message, Text)
     assert message.plain == NO_REQUIREMENTS_MESSAGE
+    assert message.style == ""
 
 
 def test_message_only_report_renders_nothing_else(message_only_report: Report) -> None:
@@ -120,13 +127,14 @@ def test_full_verdict_report_returns_ordered_renderables(full_report: Report) ->
 
     assert isinstance(title, Text)
     assert title.plain == f"Example Game (Steam app {APP_ID})"
-    assert title.style == "bold"
+    assert title.style == f"bold {AMBER_COLOR}"
 
     assert isinstance(badge_line, Text)
     assert badge_line.plain == BADGE_NOTE
     assert badge_line.style == "dim"
 
     assert isinstance(table, Table)
+    assert table.border_style == AMBER_COLOR
     assert [column.header for column in table.columns] == [
         "Component",
         "Required",
@@ -134,13 +142,27 @@ def test_full_verdict_report_returns_ordered_renderables(full_report: Report) ->
         "Result",
         "Badge / Notes",
     ]
-    assert [tuple(column.cells) for column in table.columns] == [
+    assert [tuple(column.cells) for column in table.columns[:3]] == [
         ("CPU", "GPU", "RAM"),
         ("Intel Core i5-2300", "unverified", "8 GB"),
         ("Intel Core i7-9700K", "NVIDIA GeForce GTX 1060 6GB", "16 GB"),
-        ("100% (meets requirement)", "unverified", "meets requirement"),
-        ("🔎 'Intel Core i5-2300 @ 2.80GHz' (100%)", "", ""),
     ]
+    result_cells = list(table.columns[3].cells)
+    assert [cell.plain for cell in result_cells] == [
+        "100% (meets requirement)",
+        "unverified",
+        "meets requirement",
+    ]
+    assert [cell.style for cell in result_cells] == [
+        PASS_COLOR,
+        UNVERIFIED_STYLE,
+        PASS_COLOR,
+    ]
+    assert tuple(table.columns[4].cells) == (
+        "🔎 'Intel Core i5-2300 @ 2.80GHz' (100%)",
+        "",
+        "",
+    )
 
     assert isinstance(unverified_line, Text)
     assert unverified_line.plain == f"⚠ GPU: {UNVERIFIED_NOTE}"
@@ -153,7 +175,7 @@ def test_full_verdict_report_returns_ordered_renderables(full_report: Report) ->
 
     assert isinstance(verdict_line, Text)
     assert verdict_line.plain == full_report.verdict.percentage_text
-    assert verdict_line.style == "bold"
+    assert verdict_line.style == f"bold {PASS_COLOR}"
 
 
 def test_full_verdict_report_renders_renderables_in_order(full_report: Report) -> None:
@@ -253,3 +275,115 @@ def test_badge_text_shows_the_matched_name_and_confidence() -> None:
     )
 
     assert badge_text(row) == "🔎 'Intel Core i5-2300' (98%)"
+
+
+# --- semantic colors -------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("ratio", "expected_style"),
+    [
+        (1.5, PASS_COLOR),
+        (1.0, PASS_COLOR),
+        (0.85, AMBER_COLOR),
+        (0.84, AMBER_COLOR),
+        (0.65, AMBER_COLOR),
+        (0.64, FAIL_COLOR),
+    ],
+)
+def test_result_style_follows_the_scoring_ratio_bands(
+    ratio: float,
+    expected_style: str,
+) -> None:
+    row = ComponentRow(
+        component=ComponentName.CPU,
+        user_value="user",
+        required_value="required",
+        ratio=ratio,
+    )
+
+    assert result_style(row) == expected_style
+
+
+@pytest.mark.parametrize(
+    ("passed", "expected_style"),
+    [(True, PASS_COLOR), (False, FAIL_COLOR), (None, UNVERIFIED_STYLE)],
+)
+def test_result_style_follows_the_component_pass_state(
+    passed: bool | None,
+    expected_style: str,
+) -> None:
+    row = ComponentRow(
+        component=ComponentName.RAM,
+        user_value="user",
+        required_value="required",
+        passed=passed,
+    )
+
+    assert result_style(row) == expected_style
+
+
+def test_unverified_component_result_stays_neutral() -> None:
+    row = ComponentRow(
+        component=ComponentName.GPU,
+        user_value="NVIDIA GeForce GTX 1060 6GB",
+        required_value="unverified",
+        unverified=True,
+    )
+
+    assert result_style(row) == UNVERIFIED_STYLE
+
+
+@pytest.mark.parametrize(
+    ("band", "expected_style"),
+    [
+        (VerdictBand.PASS, PASS_COLOR),
+        (VerdictBand.BORDERLINE, AMBER_COLOR),
+        (VerdictBand.POOR, AMBER_COLOR),
+        (VerdictBand.UNPLAYABLE, FAIL_COLOR),
+        (VerdictBand.FAIL, FAIL_COLOR),
+        (VerdictBand.UNVERIFIED, UNVERIFIED_STYLE),
+    ],
+)
+def test_verdict_style_maps_every_band(band: VerdictBand, expected_style: str) -> None:
+    assert verdict_style(band) == expected_style
+
+
+@pytest.mark.parametrize(
+    ("verdict", "expected_style"),
+    [
+        (scoring.build_verdict(1.5, None), PASS_COLOR),
+        (scoring.build_verdict(0.85, None), AMBER_COLOR),
+        (scoring.build_verdict(0.84, None), AMBER_COLOR),
+        (scoring.build_verdict(0.5, None), FAIL_COLOR),
+        (scoring.build_verdict(None, None), UNVERIFIED_STYLE),
+        (
+            scoring.build_verdict(1.5, None, shortfalls=[ComponentName.STORAGE]),
+            FAIL_COLOR,
+        ),
+    ],
+)
+def test_overall_verdict_line_is_colored_from_its_band(
+    verdict: Verdict,
+    expected_style: str,
+) -> None:
+    report = Report(
+        game_name="Example Game",
+        app_id=APP_ID,
+        components=[
+            ComponentRow(
+                component=ComponentName.CPU,
+                user_value="user",
+                required_value="required",
+                ratio=1.5,
+            )
+        ],
+        verdict=verdict,
+    )
+
+    verdict_line = report_renderables(report)[-1]
+
+    assert isinstance(verdict_line, Text)
+    assert verdict_line.plain == verdict.percentage_text
+    assert verdict_line.style == f"bold {expected_style}"
+
