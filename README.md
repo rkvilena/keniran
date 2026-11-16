@@ -1,5 +1,7 @@
 # keniran
 
+<img src="docs/assets/image.png" alt="KENIRAN PROJECT" width="75%">
+
 > Can I run it? Audit this machine against a Steam game's minimum requirements.
 
 `keniran <APP_ID>` audits the local machine, fetches a Steam game's minimum PC
