@@ -1,5 +1,49 @@
 # Changelog
 
+## 1.2.0 - 2026-11-15
+
+TUI-only usability pass; the one-shot `keniran <APP_ID>` CLI remains available and unchanged.
+
+### Added
+
+- A clickable **Check** button beside the App ID input; **Enter** still submits.
+
+### Changed
+
+- The home subtitle now explains how to check: enter the game's Steam App ID,
+  then press Enter.
+- README documents isolated `pipx` and `uv tool` installs so the `keniran`
+  command runs without activating a virtual environment.
+
+### Fixed
+
+- Benchmark databases now ship as package data (`keniran.database`) and load
+  through `importlib.resources`, so `pipx`/`uv tool` installs (and any
+  non-editable install) can score games instead of failing to find
+  `database/*.json`.
+
+## 1.1.2 - 2026-11-15
+
+TUI and shared-renderer refinement; no change to matching, confidence, or scoring.
+
+### Changed
+
+- The matched-benchmark marker is now `🔎` (was `⚡`), with a subdued caption
+  under the table explaining that the percentage is match confidence and the
+  result compares your system against that benchmark.
+- The TUI command box hugs its controls and leaves a blank row before results.
+
+## 1.1.1 - 2026-11-15
+
+TUI layout and Footer cleanup; the one-shot CLI is unchanged.
+
+### Changed
+
+- The home block (wordmark, subtitle, and command box) is centered as one group
+  above the docked Footer.
+- The Footer shows a single **F1** command-palette hint instead of a duplicate
+  menu entry.
+
 ## 1.1.0 - 2026-11-13
 
 TUI-only visual redesign of `keniran tui` matching the opencode TUI aesthetic; the one-shot `keniran <APP_ID>` CLI remains available and unchanged.

@@ -16,7 +16,7 @@ from keniran.adapters.benchmarks import lookup
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT_PATH = ROOT / "scripts" / "scrape_gpu.py"
 FIXTURE_PATH = ROOT / "tests" / "fixtures" / "gpu_list_sample.html"
-DB_PATH = ROOT / "database" / "gpu_db.json"
+DB_PATH = ROOT / "src" / "keniran" / "database" / "gpu_db.json"
 
 
 def _load_scraper() -> ModuleType:

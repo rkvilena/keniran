@@ -1,6 +1,6 @@
 {
   "meta": {
-    "note": "Tiny synthetic fixture for tests/test_benchmark_lookup.py; mirrors the shapes of database/cpus2a.json and database/gpu_db.json."
+    "note": "Tiny synthetic fixture for tests/test_benchmark_lookup.py; mirrors the shapes of src/keniran/database/cpus2a.json and src/keniran/database/gpu_db.json."
   },
   "data": [
     {

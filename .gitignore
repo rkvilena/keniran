@@ -16,4 +16,4 @@ dist/
 
 # Runtime artifacts
 generated/
-database/.cache/
+/.cache/

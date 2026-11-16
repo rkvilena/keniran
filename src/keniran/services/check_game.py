@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 from collections.abc import Callable, Mapping, Sequence
 from functools import lru_cache
-from pathlib import Path
+from importlib.resources import files
 from typing import Any, Final, Literal
 
 from keniran.adapters import benchmarks, hardware, steam
@@ -33,9 +33,9 @@ NO_REQUIREMENTS_MESSAGE: Final = "No PC requirements published"
 UNVERIFIED_VALUE: Final = "unverified"
 NOT_PUBLISHED_VALUE: Final = "not published"
 
-_REPO_ROOT: Final = Path(__file__).resolve().parents[3]
-_DEFAULT_CPU_DB_PATH: Final = _REPO_ROOT / "database" / "cpus2a.json"
-_DEFAULT_GPU_DB_PATH: Final = _REPO_ROOT / "database" / "gpu_db.json"
+_DATABASE_PACKAGE: Final = "keniran.database"
+_DEFAULT_CPU_DB_NAME: Final = "cpus2a.json"
+_DEFAULT_GPU_DB_NAME: Final = "gpu_db.json"
 
 BenchmarkDatabase = Mapping[str, Any] | Sequence[Mapping[str, Any]]
 
@@ -324,7 +324,16 @@ def _resolve_benchmark_databases(
 
 @lru_cache(maxsize=1)
 def _default_benchmark_databases() -> tuple[dict[str, Any], dict[str, Any]]:
-    """Read the vendored CPU/GPU JSON payloads once per process."""
-    cpu_payload: dict[str, Any] = json.loads(_DEFAULT_CPU_DB_PATH.read_text(encoding="utf-8"))
-    gpu_payload: dict[str, Any] = json.loads(_DEFAULT_GPU_DB_PATH.read_text(encoding="utf-8"))
+    """Read the packaged CPU/GPU JSON payloads once per process.
+
+    The databases are package data (``keniran.database``), so they load from an
+    installed wheel as well as a source checkout; :mod:`importlib.resources`
+    keeps both cases working.
+    """
+    cpu_payload: dict[str, Any] = json.loads(
+        files(_DATABASE_PACKAGE).joinpath(_DEFAULT_CPU_DB_NAME).read_text(encoding="utf-8")
+    )
+    gpu_payload: dict[str, Any] = json.loads(
+        files(_DATABASE_PACKAGE).joinpath(_DEFAULT_GPU_DB_NAME).read_text(encoding="utf-8")
+    )
     return cpu_payload, gpu_payload

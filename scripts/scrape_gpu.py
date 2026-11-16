@@ -1,4 +1,4 @@
-"""Build ``database/gpu_db.json`` from PassMark's public GPU benchmark list.
+"""Build ``src/keniran/database/gpu_db.json`` from PassMark's public GPU list.
 
 The canonical entry point is
 ``https://www.videocardbenchmark.net/gpu_list.html``. As of the 2026 site
@@ -6,9 +6,9 @@ revision that URL returns 404; the live equivalent is ``gpu_list.php``. The
 list page is parsed with BeautifulSoup. That page omits the sample-count/TDP
 columns and a couple of hundred rows, so PassMark's own "Video Card Mega List"
 dataset (``/data``, the backend for ``GPU_mega_page.html``) supplies those
-fields. The combined result is written atomically to ``database/gpu_db.json``;
-the raw list HTML is cached under ``database/.cache/gpu_list.html`` for
-offline debugging.
+fields. The combined result is written atomically to the packaged
+``src/keniran/database/gpu_db.json`` (shipped as package data); the raw list
+HTML is cached under ``.cache/gpu_list.html`` for offline debugging.
 
 Run manually: ``python scripts/scrape_gpu.py``.
 Offline fixture check: ``python scripts/scrape_gpu.py --dry-report``.
@@ -36,8 +36,8 @@ import requests
 from bs4 import BeautifulSoup, Tag
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DATABASE_PATH = REPO_ROOT / "database" / "gpu_db.json"
-CACHE_PATH = REPO_ROOT / "database" / ".cache" / "gpu_list.html"
+DATABASE_PATH = REPO_ROOT / "src" / "keniran" / "database" / "gpu_db.json"
+CACHE_PATH = REPO_ROOT / ".cache" / "gpu_list.html"
 FIXTURE_PATH = REPO_ROOT / "tests" / "fixtures" / "gpu_list_sample.html"
 
 SOURCE_URL = "https://www.videocardbenchmark.net/gpu_list.html"
@@ -116,7 +116,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Build database/gpu_db.json from PassMark's GPU list.",
+        description="Build src/keniran/database/gpu_db.json from PassMark's GPU list.",
     )
     parser.add_argument(
         "--dry-report",

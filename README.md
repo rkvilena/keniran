@@ -5,13 +5,11 @@
 `keniran <APP_ID>` audits the local machine, fetches a Steam game's minimum PC
 requirements, and prints a per-component comparison with a bottom-line verdict.
 
-This README documents **1.2.0**. The TUI has a centered ASCII-art `keniran`
-wordmark, clear App ID submission instructions, and clickable Check and Reset
-buttons; Enter still submits and Esc still resets. It also documents isolated
-pipx and uv tool installs, so you can run the `keniran` command without
-manually activating a virtual environment. The audit pipeline, the one-shot
-`keniran <APP_ID>` CLI, and how `or`-joined requirements are matched are
-unchanged.
+Keniran doubles as an **agentic-workflow experiment** — a small, real tool used
+to exercise an agent-driven development process. The technical decisions behind
+it are recorded in [`docs/decisions.md`](docs/decisions.md); the workflow's
+development artifacts are archived in [`.opencode/`](.opencode/). Release
+history is in [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Install
 
@@ -42,7 +40,7 @@ keniran <APP_ID>
 `generated/system_spec.json`; later runs reuse the cache. Pass
 `--refresh-spec` to force a fresh audit.
 
-## TUI (1.2.0)
+## TUI
 
 `keniran tui` launches a terminal UI that renders the same `Report` as the
 one-shot CLI. `keniran <APP_ID>` is unchanged and remains the default — the TUI
@@ -82,7 +80,7 @@ press Enter again in the same session.
 screen: the hero reappears, and the App ID input and the results are cleared,
 ready for the next check.
 
-Themes are runtime-swappable through Textual's command palette: press `Ctrl+P`,
+Themes are runtime-swappable through Textual's command palette: press `F1`,
 then choose **Theme** — the built-ins, including `tokyo-night`, remain
 selectable.
 
@@ -109,9 +107,6 @@ the row degrades to `unverified ⚠` as usual.
 Vendor names are normalized to their GPU family on both the requirement and the
 benchmark-database side before matching: NVIDIA ≡ GeForce and AMD ≡ Radeon.
 
-This is what fixed the FC27 false negative: `keniran 4080220` now reports
-**Pass** instead of the earlier wrong result.
-
 ## Requirements & limitations
 
 - Runs on Windows and POSIX hosts (native Linux and WSL2).
@@ -120,7 +115,7 @@ This is what fixed the FC27 false negative: `keniran 4080220` now reports
 - Hardware facts come from fallback chains per platform. When a value can't
   be verified (e.g. VRAM on some Linux setups), the row degrades to
   `unverified ⚠` rather than fabricating a number. Details:
-  [`.spec/spec.md`](.spec/spec.md).
+  [`docs/decisions.md`](docs/decisions.md).
 
 ## Developing
 
@@ -134,12 +129,11 @@ The venv is a contributor-only artifact; end users never need it. On WSL, a
 separate `.venv-wsl/` may exist because the distro's system Python is older
 than the 3.11 pin requires.
 
-Project engineering — architecture, decision log, per-release specs — lives
-in [`.spec/`](.spec/):
+## Documentation
 
-- [`.spec/spec.md`](.spec/spec.md) — the project blueprint: goal, architecture,
-  data contracts, and what's explicitly out of scope.
-- [`.spec/decisions.md`](.spec/decisions.md) — an append-only decision log with
-  the rationale and rejected alternatives behind each release.
-- [`.spec/units/`](.spec/units/) — per-release unit specs, task lists, and
-  working context.
+- [`docs/decisions.md`](docs/decisions.md) — the technical decision record:
+  what was chosen, why, and what was rejected.
+- [`CHANGELOG.md`](CHANGELOG.md) — per-release history.
+- [`.opencode/`](.opencode/) — the workflow's development artifacts
+  (blueprints, unit specs, run logs). `.opencode/old-workflow/` is archived;
+  `.opencode/engino/` is the active workflow.
